@@ -18,10 +18,6 @@ main() {
     printf ("Error!\n");
   }
 
-  e = swift_authenticate(c);
-  if (e) {
-    printf ("Error!\n");
-  }
   swift_delete_context(&c);
 
 }

@@ -20,13 +20,17 @@ typedef enum {
 
 struct swift_context {
   char *connecturl;
+
+  /* http header related*/
   char *authurl;
   char *authtoken;
+  int num_containers;
+  int num_objects;
+  unsigned long obj_length;
+
   char *username;
   char *password;
-
   int valid_auth;
-
   CURL *curlhandle;
 };
 
@@ -41,6 +45,9 @@ struct swift_transfer_handle {
   swift_transfermode mode;
 };
 
+#define MIN(x,y) ( (x) > (y) ? (y) : (x))
+
+
 
 swift_error swift_init();
 swift_error swift_deinit();
@@ -53,7 +60,7 @@ swift_error swift_can_connect(struct swift_context *);
 
 swift_error swift_node_list(struct swift_context *, const char *path, 
     int *n_entries, char *** contents);
-swift_error swift_node_list_free(char *** contents);
+swift_error swift_node_list_free(char ***contents);
 
 swift_error swift_container_exists(struct swift_context *, const char *container);
 swift_error swift_create_container(struct swift_context *, const char *container);
