@@ -18,8 +18,14 @@ typedef enum {
   SWIFT_WRITE,
 } swift_transfermode;
 
+typedef enum {
+  SWIFT_STATE_AUTH,
+  SWIFT_STATE_NODELIST,
+} swift_state;
+
 struct swift_context {
   char *connecturl;
+  swift_state state;
 
   /* http header related*/
   char *authurl;
@@ -44,10 +50,6 @@ struct swift_transfer_handle {
   int consistant;
   swift_transfermode mode;
 };
-
-#define MIN(x,y) ( (x) > (y) ? (y) : (x))
-
-
 
 swift_error swift_init();
 swift_error swift_deinit();

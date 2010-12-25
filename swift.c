@@ -21,23 +21,29 @@ swift_header_callback(void *ptr, size_t size, size_t nmemb, void *user) {
   strncpy(temp, ptr, size * nmemb);
   temp[size * nmemb] = '\0';
 
-  
+  switch (context->state) {  
+    case SWIFT_STATE_AUTH:
 
-  if (strncmp("X-Auth-Token: ", temp,14)) {
-      if (context->authtoken) {
-        free(context->authtoken);
+      if (strncmp("X-Auth-Token: ", temp,14) == 0) {
+        if (context->authtoken) {
+          free(context->authtoken);
+        }
+        context->authtoken = (char *)malloc(size * nmemb + 1);
+        strcpy(context->authtoken, temp);
+        context->valid_auth = 1;
+      } else if (strncmp("X-Storage-Url: ", temp, 15) == 0) {
+        if (context->authurl) {
+          free(context->authurl);
+        }
+        context->authurl = (char *)malloc(size * nmemb );
+        strcpy(context->authurl, temp + 15);
       }
-      context->authtoken = (char *)malloc(size * nmemb + 1);
-      strcpy(context->authtoken, temp);
-      context->valid_auth = 1;
-  } else if (strncmp("X-Storage-Url: ", temp, 15)) {
-      if (context->authurl) {
-        free(context->authurl);
+      break;
+    case SWIFT_STATE_NODELIST:
+      if (strncmp("X-Account-Container-Count: ", temp, 26) == 0) {
+        sscanf(temp, "X-Account-Container-Count: %d", &context->num_containers);
       }
-      context->authurl = (char *)malloc(size * nmemb - 14);
-      strcpy(context->authurl, ptr + 15);
-  } else if (strncmp("X-Account-Container-Count: ", temp, 26)) {
-    sscanf(temp, "X-Account-Counter-Count: %d", &context->num_containers);
+      break;
   }
 
   free(temp);
@@ -46,6 +52,12 @@ swift_header_callback(void *ptr, size_t size, size_t nmemb, void *user) {
 
 static size_t
 swift_body_callback(void *ptr, size_t size, size_t nmemb, void *user) {
+
+  struct swift_context *context = (struct swift_context *)user;
+
+  switch (context->state) {
+    case SWIFT_STATE_NODELIST:
+
   return size * nmemb;
 }
 
@@ -57,6 +69,7 @@ swift_authenticate(struct swift_context *context) {
   char temp[128];
 
   context->valid_auth = 0;
+  context->state = SWIFT_STATE_AUTH;
   curl_easy_reset(context->curlhandle);
 
   curl_easy_setopt(context->curlhandle, CURLOPT_HEADERFUNCTION, 
@@ -191,6 +204,8 @@ swift_node_list(struct swift_context *context, const char *path,
 
   swift_error s_err;
   char *url;
+  unsigned long response;
+  struct curl_slist *headerlist = NULL;
 
   if (!context->valid_auth) {
     if (s_err = swift_authenticate(context)) {
@@ -204,10 +219,24 @@ swift_node_list(struct swift_context *context, const char *path,
   }
   sprintf(url, "%s%s", context->authurl, path);
 
+  context->state = SWIFT_STATE_NODELIST;
   curl_easy_reset(context->curlhandle);
   curl_easy_setopt(context->curlhandle, CURLOPT_URL, url);
-  curl_easy_setopt(context->curlhandle, CURLOPT_NOBODY, 1);
   curl_easy_setopt(context->curlhandle, CURLOPT_HEADERFUNCTION, swift_header_callback);
+  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEHEADER, context);
+  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEFUNCTION, swift_body_callback);
+
+  headerlist = curl_slist_append(headerlist, context->authtoken);
+  curl_easy_setopt(context->curlhandle, CURLOPT_HTTPHEADER, headerlist);
+
+  curl_easy_perform(context->curlhandle);
+  curl_slist_free_all(headerlist);
+  curl_easy_getinfo(context->curlhandle, CURLINFO_RESPONSE_CODE, &response);
+
+  if (response != 200) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
+
 
   free(url);
 }
