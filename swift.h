@@ -20,7 +20,10 @@ typedef enum {
 
 typedef enum {
   SWIFT_STATE_AUTH,
-  SWIFT_STATE_NODELIST,
+  SWIFT_STATE_CONTAINERLIST,
+  SWIFT_STATE_OBJECTLIST,
+  SWIFT_STATE_CONTAINER_CREATE,
+  SWIFT_STATE_CONTAINDE_DELETE,
 } swift_state;
 
 struct swift_context {
@@ -33,6 +36,10 @@ struct swift_context {
   int num_containers;
   int num_objects;
   unsigned long obj_length;
+
+  /* Nodelist stuff */
+  char *buffer;
+  int buffer_pos;
 
   char *username;
   char *password;
