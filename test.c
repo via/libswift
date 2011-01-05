@@ -13,6 +13,7 @@ main(int argc, char ** argv) {
   swift_error e;
   int l;
   char ** contents = NULL;
+  unsigned long size;
 
   swift_init();
   e = swift_create_context(&c, "http://swiftbox:11000/v1.0", "test:tester", "testing");
@@ -44,6 +45,12 @@ main(int argc, char ** argv) {
   } else if (strcmp(argv[1], "contdelete") == 0) {
     if (swift_delete_container(c, argv[2])) {
       printf("Failed\n");
+    }
+  } else if (strcmp(argv[1], "objexist") == 0) {
+    if (swift_object_exists(c, argv[2], argv[3], &size)) {
+      printf("Not found!\n");
+    } else {
+      printf("Found, size = %d\n", size);
     }
   }
 

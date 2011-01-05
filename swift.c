@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include <curl/curl.h>
+#include <stdarg.h>
 
 #include "swift.h"
 
@@ -17,6 +18,51 @@ swift_chomp(char *str) {
     *pos = '\0';
   }
 }
+ 
+swift_error
+swift_response(int response) {
+  swift_error s_err;
+  switch (response) {
+    case 404:
+      s_err = SWIFT_ERROR_NOTFOUND;
+      break;
+    case 401:
+      s_err = SWIFT_ERROR_PERMISSIONS;
+      break;
+    case 400:
+      s_err = SWIFT_ERROR_INTERNAL;
+      break;
+    case 200:
+    case 201: /*Fallthrough */
+    case 204: /*Fallthrough */
+      s_err = SWIFT_SUCCESS;
+      break;
+    default:
+      s_err = SWIFT_ERROR_UNKNOWN;
+      break;
+  }
+
+  return s_err;
+}                                 
+
+
+struct curl_slist *
+swift_set_headers(struct swift_context *c, int num_headers, ...) {
+
+  struct curl_slist *headerlist = NULL;
+  va_list args;
+
+  va_start(args, num_headers);
+  while (num_headers--) {
+    char *temp = va_arg(args, char *);
+    headerlist = curl_slist_append(headerlist, temp);
+  }
+  va_end(args);
+
+  curl_easy_setopt(c->curlhandle, CURLOPT_HTTPHEADER, headerlist); 
+  return headerlist;
+}
+   
 
 static void
 swift_string_to_list(char *string, int n_entries, char ***_list) {
@@ -39,6 +85,7 @@ swift_string_to_list(char *string, int n_entries, char ***_list) {
     cur_str_pos = newpos + 1;
   } while (cur_list_pos < n_entries);
 }
+   
 
 static size_t
 swift_header_callback(void *ptr, size_t size, size_t nmemb, void *user) {
@@ -76,6 +123,7 @@ swift_header_callback(void *ptr, size_t size, size_t nmemb, void *user) {
       break;
     case SWIFT_STATE_CONTAINERLIST:
     case SWIFT_STATE_OBJECTLIST: /*Fallthrough */
+    case SWIFT_STATE_OBJECT_EXISTS: /*Fallthrough */
       if (strncmp("X-Account-Container-Count: ", temp, 26) == 0) {
         sscanf(temp, "X-Account-Container-Count: %d", &context->num_containers);
       }
@@ -83,8 +131,10 @@ swift_header_callback(void *ptr, size_t size, size_t nmemb, void *user) {
         sscanf(temp, "X-Container-Object-Count: %d", &context->num_objects);
       }
       if (strncmp("Content-Length: ", temp, 16) == 0) {
-        sscanf(temp, "Content-Length: %d", &context->obj_length);
+        sscanf(temp, "Content-Length: %ld", &context->obj_length);
       }
+      break;
+    default:
       break;
   }
 
@@ -123,12 +173,32 @@ swift_body_callback(void *ptr, size_t size, size_t nmemb, void *user) {
   return size * nmemb;
 }
 
+ 
+int
+swift_perform(struct swift_context *context)  {
+
+  int response;
+  struct curl_slist *headers = NULL;
+
+  headers = swift_set_headers(context, 1, context->authtoken);
+  curl_easy_perform(context->curlhandle);
+  curl_slist_free_all(headers);
+
+  curl_easy_getinfo(context->curlhandle, CURLINFO_RESPONSE_CODE, &response);
+  curl_easy_setopt(context->curlhandle, CURLOPT_HEADERFUNCTION, swift_header_callback);
+  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEHEADER, context);
+  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEFUNCTION, swift_body_callback);
+  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEDATA, context);
+  return response;
+}                                   
+
 static swift_error
 swift_authenticate(struct swift_context *context) {
   
   struct curl_slist *headerlist = NULL;
   unsigned long response;
-  char temp[128];
+  char username[64];
+  char password[64];
 
   context->valid_auth = 0;
   context->state = SWIFT_STATE_AUTH;
@@ -141,23 +211,18 @@ swift_authenticate(struct swift_context *context) {
       swift_body_callback);
   curl_easy_setopt(context->curlhandle, CURLOPT_URL, context->connecturl);
 
-  sprintf(temp, "X-Storage-User: %s", context->username);
-  headerlist = curl_slist_append(headerlist, temp);
-  sprintf(temp, "X-Storage-Pass: %s", context->password);
-  headerlist = curl_slist_append(headerlist, temp);
 
-  curl_easy_setopt(context->curlhandle, CURLOPT_HTTPHEADER, headerlist);
+  sprintf(username, "X-Storage-User: %s", context->username);
+  sprintf(password, "X-Storage-Pass: %s", context->password);
+
+  headerlist = swift_set_headers(context, 2, username, password);
+
   curl_easy_perform(context->curlhandle);
   curl_slist_free_all(headerlist);
 
   curl_easy_getinfo(context->curlhandle, CURLINFO_RESPONSE_CODE, &response);
 
-  if (response != 204) {
-    context->valid_auth = 0;
-    return SWIFT_ERROR_PERMISSIONS;
-  }
-
-  return SWIFT_SUCCESS;
+  return swift_response(response);
 }
 
 
@@ -261,19 +326,9 @@ swift_can_connect(struct swift_context *context) {
 }
 
 swift_error
-swift_node_list(struct swift_context *context, const char *path,
-    int *n_entries, char ***contents) {
+swift_node_list_setup(struct swift_context *context, const char *path) {
 
-  swift_error s_err;
   char *url;
-  unsigned long response;
-  struct curl_slist *headerlist = NULL;
-
-  if (!context->valid_auth) {
-    if (s_err = swift_authenticate(context)) {
-      return s_err;
-    }
-  }
 
   url = (char *)malloc(strlen(path) + strlen(context->authurl) + 1);
   if (!url) {
@@ -289,15 +344,31 @@ swift_node_list(struct swift_context *context, const char *path,
   }
   curl_easy_reset(context->curlhandle);
   curl_easy_setopt(context->curlhandle, CURLOPT_URL, url);
-  curl_easy_setopt(context->curlhandle, CURLOPT_HEADERFUNCTION, swift_header_callback);
-  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEHEADER, context);
-  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEFUNCTION, swift_body_callback);
-  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEDATA, context);
 
-  headerlist = curl_slist_append(headerlist, context->authtoken);
-  curl_easy_setopt(context->curlhandle, CURLOPT_HTTPHEADER, headerlist);
+  return SWIFT_SUCCESS;
+}
 
-  curl_easy_perform(context->curlhandle);
+
+swift_error
+swift_node_list(struct swift_context *context, const char *path,
+    int *n_entries, char ***contents) {
+
+  swift_error s_err;
+  unsigned long response;
+
+  if (!(context->valid_auth)) {
+    if ( (s_err = swift_authenticate(context)) ) {
+      return s_err;
+    }
+  }
+
+
+  if ( (s_err = swift_node_list_setup(context, path))  ) {
+    return s_err;
+  }
+
+  response = swift_perform(context);
+
   if (context->state == SWIFT_STATE_OBJECTLIST) {
     swift_string_to_list(context->buffer, context->num_objects, contents);
     *n_entries = context->num_objects;
@@ -306,23 +377,11 @@ swift_node_list(struct swift_context *context, const char *path,
     *n_entries = context->num_containers;
   }
 
-  curl_slist_free_all(headerlist);
-  curl_easy_getinfo(context->curlhandle, CURLINFO_RESPONSE_CODE, &response);
-
-  if (response != 200) {
-    swift_node_list_free(contents);
-    return SWIFT_ERROR_NOTFOUND;
-  }
-
-
-  free(url);
-  return SWIFT_SUCCESS;
+ return swift_response(response);
 }
 
 swift_error
 swift_node_list_free(char ***contents) {
-  int cur_pos;
-  char *temp;
 
   if (!contents)
     return SWIFT_SUCCESS;
@@ -333,6 +392,8 @@ swift_node_list_free(char ***contents) {
 
   free(**contents);
   free(*contents);
+
+  return SWIFT_SUCCESS;
 
 }
 
@@ -351,23 +412,17 @@ swift_container_exists(struct swift_context *context, const char *container) {
 
   swift_error e = swift_node_list(context, temp, &n_entries, &contents);
   free(temp);
+  if (!e) {
+    swift_node_list_free(&contents);
+  }
   return e;
 }
 
 swift_error
-swift_create_container(struct swift_context * context, const char *container) {
+swift_create_container_setup(struct swift_context *context, const char *container) {
 
   char *url;
-  struct curl_slist *headerlist = NULL;
-  int response;
-  swift_error s_err;
-  
-  if (!context->valid_auth) {
-    if (s_err = swift_authenticate(context)) {
-      return s_err;
-    }
-  }
-
+ 
   url = (char *)malloc(strlen(container) + strlen(context->authurl) + 2);
   if (!url) {
     return SWIFT_ERROR_MEMORY;
@@ -376,72 +431,125 @@ swift_create_container(struct swift_context * context, const char *container) {
   context->state = SWIFT_STATE_CONTAINER_CREATE;
   curl_easy_reset(context->curlhandle);
   curl_easy_setopt(context->curlhandle, CURLOPT_URL, url);
-  curl_easy_setopt(context->curlhandle, CURLOPT_HEADERFUNCTION, swift_header_callback);
-  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEHEADER, context);
-  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEFUNCTION, swift_body_callback);
-  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEDATA, context);
-  curl_easy_setopt(context->curlhandle, CURLOPT_CUSTOMREQUEST, "PUT");
+  curl_easy_setopt(context->curlhandle, CURLOPT_CUSTOMREQUEST, "PUT"); 
 
-  headerlist = curl_slist_append(headerlist, context->authtoken);
-  curl_easy_setopt(context->curlhandle, CURLOPT_HTTPHEADER, headerlist);
 
-  curl_easy_perform(context->curlhandle);
-                                                                      
-  curl_slist_free_all(headerlist);
-  curl_easy_getinfo(context->curlhandle, CURLINFO_RESPONSE_CODE, &response);
+  return SWIFT_SUCCESS;
+}
 
-  if (response != 201) {
-    free(url);
-    return SWIFT_ERROR_UNKNOWN;
+
+swift_error
+swift_create_container(struct swift_context * context, const char *container) {
+
+  int response;
+  swift_error s_err;
+  
+  if (!context->valid_auth) {
+    if ( (s_err = swift_authenticate(context)) ) {
+      return s_err;
+    }
   }
 
+  swift_create_container_setup(context, container);
+  response = swift_perform(context);
+
+  return swift_response(response);
+}
+
+swift_error
+swift_delete_container_setup(struct swift_context *context, const char *container) {
+
+  char *url;
+
+  if (!context || !container) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
+
+  url = (char *)malloc(strlen(container) + strlen(context->authurl) + 2);
+  if (!url) {
+    return SWIFT_ERROR_MEMORY;
+  }
+  sprintf(url, "%s/%s", context->authurl, container); 
+  context->state = SWIFT_STATE_CONTAINER_DELETE;
+  curl_easy_reset(context->curlhandle);
+  curl_easy_setopt(context->curlhandle, CURLOPT_URL, url);
+  curl_easy_setopt(context->curlhandle, CURLOPT_CUSTOMREQUEST, "DELETE");  
 
   free(url);
-  return SWIFT_SUCCESS;                                               
+
+  return SWIFT_SUCCESS;
 }
-  
+
+
 swift_error
 swift_delete_container(struct swift_context * context, const char *container) {
                                                                                
-  char *url;
-  struct curl_slist *headerlist = NULL;
   int response;
   swift_error s_err;
   
   if (!context->valid_auth) {
-    if (s_err = swift_authenticate(context)) {
+    if ( (s_err = swift_authenticate(context)) ) {
       return s_err;
     }
   }
 
-  url = (char *)malloc(strlen(container) + strlen(context->authurl) + 2);
+  if ( (s_err = swift_delete_container_setup(context, container)) ) {
+    return s_err;
+  }
+
+  response = swift_perform(context);
+
+  return swift_response(response);
+}
+
+swift_error
+swift_object_exists_setup(struct swift_context *context, const char *container,
+    const char *object) {
+
+  char *url;
+
+  if (!context || !container || !object) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
+
+  url = (char *)malloc(strlen(container) + strlen(context->authurl) +
+      strlen(object) + 3);
   if (!url) {
     return SWIFT_ERROR_MEMORY;
   }
-  sprintf(url, "%s/%s", context->authurl, container); 
-  context->state = SWIFT_STATE_CONTAINER_CREATE;
+  sprintf(url, "%s/%s/%s", context->authurl, container, object); 
+  context->state = SWIFT_STATE_OBJECT_EXISTS;
   curl_easy_reset(context->curlhandle);
   curl_easy_setopt(context->curlhandle, CURLOPT_URL, url);
-  curl_easy_setopt(context->curlhandle, CURLOPT_HEADERFUNCTION, swift_header_callback);
-  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEHEADER, context);
-  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEFUNCTION, swift_body_callback);
-  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEDATA, context);
-  curl_easy_setopt(context->curlhandle, CURLOPT_CUSTOMREQUEST, "DELETE");
-
-  headerlist = curl_slist_append(headerlist, context->authtoken);
-  curl_easy_setopt(context->curlhandle, CURLOPT_HTTPHEADER, headerlist);
-
-  curl_easy_perform(context->curlhandle);
-                                                                      
-  curl_slist_free_all(headerlist);
-  curl_easy_getinfo(context->curlhandle, CURLINFO_RESPONSE_CODE, &response);
-
-  if (response != 204) {
-    free(url);
-    return SWIFT_ERROR_UNKNOWN;
-  }
-
+  curl_easy_setopt(context->curlhandle, CURLOPT_NOBODY, 1);
 
   free(url);
-  return SWIFT_SUCCESS;                                                        
+
+  return SWIFT_SUCCESS;
 }
+
+
+
+
+swift_error
+swift_object_exists(struct swift_context *context, const char *container,
+    const char *object, unsigned long *length) {
+                                                                                
+  int response;
+  swift_error s_err;
+  
+  if (!context->valid_auth) {
+    if ( (s_err = swift_authenticate(context)) ) {
+      return s_err;
+    }
+  }
+  if ( (s_err = swift_object_exists_setup(context, container, object)) ) {
+    return s_err;
+  }
+  response = swift_perform(context);
+
+  *length = context->obj_length;
+
+  return swift_response(response);;
+}
+
