@@ -11,6 +11,7 @@ typedef enum {
   SWIFT_ERROR_PERMISSIONS,
   SWIFT_ERROR_INTERNAL,
   SWIFT_ERROR_MEMORY,
+  SWIFT_ERROR_EXISTS,
 } swift_error;
 
 typedef enum {
@@ -25,6 +26,9 @@ typedef enum {
   SWIFT_STATE_CONTAINER_CREATE,
   SWIFT_STATE_CONTAINER_DELETE,
   SWIFT_STATE_OBJECT_EXISTS,
+  SWIFT_STATE_OBJECT_DELETE,
+  SWIFT_STATE_OBJECT_READ,
+  SWIFT_STATE_OBJECT_WRITE,
 } swift_state;
 
 struct swift_context {
@@ -50,13 +54,15 @@ struct swift_context {
 
 
 struct swift_transfer_handle {
-  char *path;
+  char *container;
+  char *object;
   void *ptr;
   unsigned long length;
   unsigned long fpos;
 
   int consistant;
   swift_transfermode mode;
+  struct swift_context *parent;
 };
 
 swift_error swift_init();
@@ -79,13 +85,18 @@ swift_error swift_delete_container(struct swift_context *, const char *container
 swift_error swift_object_exists(struct swift_context *, const char *container, 
     const char *object, unsigned long *length);
 swift_error swift_create_object(struct swift_context *, const char *container, 
-    const char *object, struct swift_transfer_handle *, unsigned long length);
+    const char *object, struct swift_transfer_handle **, unsigned long length);
 swift_error swift_delete_object(struct swift_context *, const char *container, 
     const char *object);
-swift_error swift_object_contents(struct swift_context *, const char *container, 
-    const char *object, struct swift_transfer_handle *);
+swift_error swift_read_object(struct swift_context *, const char *container, 
+    const char *object, struct swift_transfer_handle **);
 
-swift_error swift_sync(struct swift_context *, struct swift_transfer_handle *);
-swift_error swift_free_transfer_handle(struct swift_transfer_handle **);
+swift_error swift_sync(struct swift_transfer_handle *);
+void swift_free_transfer_handle(struct swift_transfer_handle **);
+
+size_t swift_read(struct swift_transfer_handle *, void *buf, size_t nbytes);
+size_t swift_write(struct swift_transfer_handle *, const void *buf, size_t n);
+size_t swift_get_data(struct swift_transfer_handle *, void **ptr);
+void swift_seek(struct swift_transfer_handle *, unsigned long);
 
 #endif

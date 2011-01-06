@@ -102,6 +102,58 @@ START_TEST (test_swift_string_to_list) {
 }
 END_TEST
 
+START_TEST (test_swift_header_callback_authtoken) {
+
+  struct swift_context c;
+  c.state = SWIFT_STATE_AUTH;
+
+  c.authtoken = NULL;
+  swift_header_callback("Nonsensical data", 1, 16, (void *)&c);
+  fail_if(c.authtoken != NULL);
+
+  swift_header_callback("X-Auth-Token: ABCDEFG\n", 1, 22, (void *)&c);
+  fail_if(c.authtoken == NULL);
+  fail_if( strcmp(c.authtoken, "X-Auth-Token: ABCDEFG") != 0);
+
+  swift_header_callback("X-Auth-Token:BADDATA\r\n", 1, 22, (void *)&c);
+  fail_if(c.authtoken == NULL);
+  fail_if( strcmp(c.authtoken, "X-Auth-Token: ABCDEFG") != 0);
+
+  swift_header_callback("X-Auth-Token: AAAAAAAAAAAAAAAAAAAAAA\r\n", 2, 18, (void *)&c);
+  fail_if(c.authtoken == NULL);
+  fail_if( strcmp(c.authtoken, "X-Auth-Token: AAAAAAAAAAAAAAAAAAAAAA") != 0);
+
+  free(c.authtoken);
+}
+END_TEST
+
+START_TEST (test_swift_header_callback_authurl) {
+
+  struct swift_context c;
+  c.state = SWIFT_STATE_AUTH;
+
+  c.authurl = NULL;
+
+  swift_header_callback("Nonsensical data", 1, 16, (void *)&c);
+  fail_if(c.authurl != NULL);
+
+  swift_header_callback("X-Storage-Url: ABCDEFG\n", 1, 23, (void *)&c);
+  fail_if(c.authurl == NULL);
+  fail_if( strcmp(c.authurl, "ABCDEFG") != 0);
+
+  swift_header_callback("X-Storage-Url:BADDATA\r\n", 1, 23, (void *)&c);
+  fail_if(c.authurl == NULL);
+  fail_if( strcmp(c.authurl, "ABCDEFG") != 0);
+
+  swift_header_callback("X-Storage-Url: AAAAAAAAAAAAAAAAAAAAA\r\n", 2, 19, (void *)&c);
+  fail_if(c.authurl == NULL);
+  fail_if( strcmp(c.authurl, "AAAAAAAAAAAAAAAAAAAAA") != 0);
+
+  free(c.authurl);
+}
+END_TEST
+
+
 START_TEST (test_swift_create_context) {
 
   struct swift_context *c;
@@ -126,6 +178,7 @@ END_TEST
 Suite *swift_suite(void) {
   Suite *s = suite_create("libswift");
   TCase *tc_core = tcase_create("Internal functions");
+  TCase *tc_cb = tcase_create("Callback functions");
   TCase *tc_api = tcase_create("API functions");
 
   tcase_add_test(tc_core, test_swift_response);
@@ -135,9 +188,13 @@ Suite *swift_suite(void) {
 
   tcase_add_test(tc_api, test_swift_create_context);
 
+  tcase_add_test(tc_cb, test_swift_header_callback_authtoken);
+  tcase_add_test(tc_cb, test_swift_header_callback_authurl);
+
 
 
   suite_add_tcase(s, tc_core);
+  suite_add_tcase(s, tc_cb);
   suite_add_tcase(s, tc_api);
 
   return s;

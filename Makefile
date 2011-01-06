@@ -5,8 +5,10 @@ CC=gcc
 libswift.o: swift.c swift.h
 	${CC} ${CFLAGS} -o libswift.o -c swift.c 
 
-tests: tests/test_swift.c libswift.o
+tests/test_swift: tests/test_swift.c libswift.o
 	${CC} ${CFLAGS} -o tests/test_swift tests/test_swift.c libswift.o `pkg-config check --cflags --libs` 
+
+tests: tests/test_swift
 
 client: client.c libswift.o
 	${CC} ${CFLAGS} -o client client.c libswift.o 

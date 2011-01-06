@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "swift.h"
 
@@ -7,13 +8,12 @@ swift_error swift_authenticate(struct swift_context *s);
 int
 main(int argc, char ** argv) {
 
-
-
   struct swift_context *c = NULL;
   swift_error e;
   int l;
   char ** contents = NULL;
   unsigned long size;
+  void *data;
 
   swift_init();
   e = swift_create_context(&c, "http://swiftbox:11000/v1.0", "test:tester", "testing");
@@ -50,10 +50,21 @@ main(int argc, char ** argv) {
     if (swift_object_exists(c, argv[2], argv[3], &size)) {
       printf("Not found!\n");
     } else {
-      printf("Found, size = %d\n", size);
+      printf("Found, size = %ld\n", size);
+    }
+  } else if (strcmp(argv[1], "readobj") == 0) {
+    struct swift_transfer_handle *h;
+    if (swift_read_object(c, argv[2], argv[3], &h)) {
+      printf ("Error\n");
+    } else {
+      swift_get_data(h, &data);
+      printf("%100s\n", (char *)data);
+      swift_free_transfer_handle(&h);
     }
   }
 
   swift_delete_context(&c);
+
+  return 0;
 
 }

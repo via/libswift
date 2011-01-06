@@ -171,6 +171,16 @@ swift_body_callback(void *ptr, size_t size, size_t nmemb, void *user) {
       context->buffer_pos += size * nmemb;
 
       break;
+    case SWIFT_STATE_OBJECT_READ:
+      if (!context->buffer) {
+        return 0;
+      }
+      if (context->buffer_pos + size * nmemb > context->obj_length) {
+        return 0;
+      }
+
+      memcpy(context->buffer + context->buffer_pos, ptr, size * nmemb);
+      context->buffer_pos += size * nmemb;
     default:
       break;
 
@@ -568,3 +578,271 @@ swift_object_exists(struct swift_context *context, const char *container,
   return swift_response(response);;
 }
 
+STATIC swift_error
+swift_delete_object_setup(struct swift_context *context, const char *container,
+    const char *object) {
+
+  char *url;
+
+  if (!context || !container || !object) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
+
+  url = (char *)malloc(strlen(container) + strlen(context->authurl) +
+      strlen(object) + 3);
+  if (!url) {
+    return SWIFT_ERROR_MEMORY;
+  }
+
+  sprintf(url, "%s/%s/%s", context->authurl, container, object); 
+  context->state = SWIFT_STATE_OBJECT_DELETE;
+  curl_easy_reset(context->curlhandle);
+  curl_easy_setopt(context->curlhandle, CURLOPT_URL, url);
+  curl_easy_setopt(context->curlhandle, CURLOPT_CUSTOMREQUEST, "DELETE");
+  free(url);
+
+  return SWIFT_SUCCESS;
+}
+
+swift_error
+swift_delete_object(struct swift_context *context, const char *container,
+    const char *object) {
+
+  int response;
+  swift_error s_err;
+
+  if (!context->valid_auth) {
+    if ( (s_err = swift_authenticate(context)) ) {
+      return s_err;
+    }
+  }
+
+  if ( (s_err = swift_delete_object_setup(context, container, object)) ) {
+    return s_err;
+  }
+
+  response = swift_perform(context);
+
+  return swift_response(response);;
+}
+
+void
+swift_free_transfer_handle(struct swift_transfer_handle **handle) {
+
+  struct swift_transfer_handle *l_handle;
+
+  if (!handle || !*handle)
+    return;
+
+  l_handle = *handle;
+  free(l_handle->ptr);
+  free(l_handle->object);
+  free(l_handle->container);
+  free(l_handle);
+
+}
+  
+
+STATIC swift_error
+swift_create_transfer_handle(struct swift_context *context, const char *container, 
+    const char *object, struct swift_transfer_handle **handle, unsigned long length) {
+
+  struct swift_transfer_handle *l_handle;
+
+  *handle = (struct swift_transfer_handle *)
+    malloc(sizeof(struct swift_transfer_handle));
+
+  if (!*handle) {
+    return SWIFT_ERROR_MEMORY;
+  }
+
+  /*Set up the various entries in the handle, starting with the path */
+  l_handle = *handle;
+  l_handle->container = (char *)malloc(strlen(container) + 1);
+  if (!l_handle->container) {
+    swift_free_transfer_handle(handle);
+    return SWIFT_ERROR_MEMORY;
+  }
+
+  l_handle->object = (char *)malloc(strlen(object) + 1);
+  if (!l_handle->object) {
+    swift_free_transfer_handle(handle);
+    return SWIFT_ERROR_MEMORY;
+  }
+
+  l_handle->ptr = malloc(length);
+  if (!l_handle->ptr) {
+    swift_free_transfer_handle(handle);
+    return SWIFT_ERROR_MEMORY; 
+  }
+
+  strcpy(l_handle->container, container);
+  strcpy(l_handle->object, object);
+  l_handle->parent = context;
+  l_handle->length = length;
+  l_handle->fpos = 0;
+
+  return SWIFT_SUCCESS;
+}
+
+
+swift_error
+swift_create_object(struct swift_context *context, const char *container,
+    const char *object, struct swift_transfer_handle **handle, unsigned long len) {
+
+  unsigned long length;
+  struct swift_transfer_handle *l_handle;
+  swift_error s_err;
+
+  if (!context || !container ||
+      !object || !handle) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
+
+  if (swift_object_exists(context, container, object, &length) == SWIFT_SUCCESS) {
+    /* If it already exists, refuse to do anything */
+    return SWIFT_ERROR_EXISTS;
+  }
+
+  if ( (s_err = swift_create_transfer_handle(context, container, object, 
+          handle, len))) {
+    return s_err;
+  }
+
+  /* Make our syntax easier */
+  l_handle = *handle;
+
+  memset(l_handle->ptr, 0, len);
+  l_handle->mode = SWIFT_WRITE;
+
+  return SWIFT_SUCCESS;
+}
+
+swift_error
+swift_read_object(struct swift_context *context, const char *container,
+    const char *object, struct swift_transfer_handle **handle) {
+
+  unsigned long length;
+  struct swift_transfer_handle *l_handle;
+  swift_error s_err;
+
+  if (!context || !container ||
+      !object || !handle) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
+
+  if ( (s_err = swift_object_exists(context, container, object, &length)) ) {
+    /* If it already exists, refuse to do anything */
+    return s_err;
+  }
+
+  if ( (s_err = swift_create_transfer_handle(context, container, object, 
+          handle, length))) {
+    return s_err;
+  }
+
+  l_handle = *handle;
+  l_handle->mode = SWIFT_READ;
+
+  return swift_sync(l_handle);
+}
+
+swift_error
+swift_sync_setup(struct swift_transfer_handle *handle) {
+
+  struct swift_context *context = handle->parent;
+  char *url;
+
+  if (!context || !handle->container || !handle->object) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
+
+  url = (char *)malloc(strlen(handle->container) + strlen(context->authurl) +
+      strlen(handle->object) + 3);
+  if (!url) {
+    return SWIFT_ERROR_MEMORY;
+  }
+
+  sprintf(url, "%s/%s/%s", context->authurl, handle->container, handle->object); 
+  curl_easy_reset(context->curlhandle);
+  curl_easy_setopt(context->curlhandle, CURLOPT_URL, url);
+  context->buffer = handle->ptr;
+  context->buffer_pos = 0;
+  context->obj_length = handle->length;
+
+  switch (handle->mode) {
+    case SWIFT_READ:
+      context->state = SWIFT_STATE_OBJECT_READ;
+      break;
+    case SWIFT_WRITE:
+      context->state = SWIFT_STATE_OBJECT_WRITE;
+      break;
+  }
+
+  free(url);
+
+  return SWIFT_SUCCESS;
+}
+
+
+swift_error
+swift_sync(struct swift_transfer_handle *handle) {
+
+  swift_error s_err;
+  int response;
+
+  if (  (s_err = swift_sync_setup(handle) )) {
+    return s_err;
+  }
+  
+  response = swift_perform(handle->parent);
+  return swift_response(response);
+}
+
+size_t
+swift_read(struct swift_transfer_handle *handle, void *buf, size_t nbytes) {
+
+  if (!handle || !buf) {
+    return 0;
+  }
+
+  int newbytes = (handle->length - handle->fpos) < nbytes ?
+    (handle->length - handle->fpos) : 
+    nbytes;
+
+  memcpy(buf, handle->ptr + handle->fpos, newbytes);
+  return newbytes;
+}
+
+
+size_t
+swift_write(struct swift_transfer_handle *handle, const void *buf, size_t nbytes) {
+
+  if (!handle || !buf) {
+    return 0;
+  }
+
+  int newbytes = (handle->length - handle->fpos) < nbytes ?
+    (handle->length - handle->fpos) : 
+    nbytes;
+
+  memcpy(handle->ptr + handle->fpos, buf, newbytes);
+  return newbytes;
+}
+
+size_t
+swift_get_data(struct swift_transfer_handle *handle, void **ptr) {
+
+  *ptr = handle->ptr;
+  return handle->length;
+
+}
+
+
+void
+swift_seek(struct swift_transfer_handle *handle, unsigned long pos) {
+
+  handle->fpos = pos;
+
+}
+  
