@@ -6,20 +6,26 @@
 #include <stdarg.h>
 
 #include "swift.h"
+#include "swift_private.h"
 
-static void
+STATIC void
 swift_chomp(char *str) {
-  char *pos;
-  if ((pos = strrchr(str, '\r')) != NULL) {
-    *pos = '\0';
+
+  if (!str) {
+    return;
   }
 
-  if ((pos = strrchr(str, '\n')) != NULL) {
-    *pos = '\0';
+  if (str[strlen(str) - 1] == '\n') {
+    str[strlen(str) - 1] = '\0';
   }
+
+  if (str[strlen(str) - 1] == '\r') {
+    str[strlen(str) - 1] = '\0';
+  }
+
 }
  
-swift_error
+STATIC swift_error
 swift_response(int response) {
   swift_error s_err;
   switch (response) {
@@ -46,8 +52,8 @@ swift_response(int response) {
 }                                 
 
 
-struct curl_slist *
-swift_set_headers(struct swift_context *c, int num_headers, ...) {
+STATIC struct curl_slist *
+swift_set_headers(CURL *c, int num_headers, ...) {
 
   struct curl_slist *headerlist = NULL;
   va_list args;
@@ -59,12 +65,12 @@ swift_set_headers(struct swift_context *c, int num_headers, ...) {
   }
   va_end(args);
 
-  curl_easy_setopt(c->curlhandle, CURLOPT_HTTPHEADER, headerlist); 
+  curl_easy_setopt(c, CURLOPT_HTTPHEADER, headerlist); 
   return headerlist;
 }
    
 
-static void
+STATIC void
 swift_string_to_list(char *string, int n_entries, char ***_list) {
   int cur_list_pos = 0;
   char *cur_str_pos = string;
@@ -74,7 +80,7 @@ swift_string_to_list(char *string, int n_entries, char ***_list) {
   list = *_list;
   list[n_entries] = NULL;
 
-  do {
+  while (cur_list_pos < n_entries) {
     list[cur_list_pos] = cur_str_pos;
     newpos = strchr(cur_str_pos, '\n');
     if (!newpos) {
@@ -83,11 +89,11 @@ swift_string_to_list(char *string, int n_entries, char ***_list) {
     *newpos = '\0';
     cur_list_pos++;
     cur_str_pos = newpos + 1;
-  } while (cur_list_pos < n_entries);
+  } 
 }
    
 
-static size_t
+STATIC size_t
 swift_header_callback(void *ptr, size_t size, size_t nmemb, void *user) {
 
   struct swift_context *context = (struct swift_context *)user;
@@ -142,7 +148,7 @@ swift_header_callback(void *ptr, size_t size, size_t nmemb, void *user) {
   return size * nmemb;
 }
 
-static size_t
+STATIC size_t
 swift_body_callback(void *ptr, size_t size, size_t nmemb, void *user) {
 
   struct swift_context *context = (struct swift_context *)user;
@@ -174,25 +180,25 @@ swift_body_callback(void *ptr, size_t size, size_t nmemb, void *user) {
 }
 
  
-int
+STATIC int
 swift_perform(struct swift_context *context)  {
 
   int response;
   struct curl_slist *headers = NULL;
 
-  headers = swift_set_headers(context, 1, context->authtoken);
-  curl_easy_perform(context->curlhandle);
-  curl_slist_free_all(headers);
-
-  curl_easy_getinfo(context->curlhandle, CURLINFO_RESPONSE_CODE, &response);
+  headers = swift_set_headers(context->curlhandle, 1, context->authtoken);
   curl_easy_setopt(context->curlhandle, CURLOPT_HEADERFUNCTION, swift_header_callback);
   curl_easy_setopt(context->curlhandle, CURLOPT_WRITEHEADER, context);
   curl_easy_setopt(context->curlhandle, CURLOPT_WRITEFUNCTION, swift_body_callback);
   curl_easy_setopt(context->curlhandle, CURLOPT_WRITEDATA, context);
+  curl_easy_perform(context->curlhandle);
+  curl_slist_free_all(headers);
+
+  curl_easy_getinfo(context->curlhandle, CURLINFO_RESPONSE_CODE, &response);
   return response;
 }                                   
 
-static swift_error
+STATIC swift_error
 swift_authenticate(struct swift_context *context) {
   
   struct curl_slist *headerlist = NULL;
@@ -215,7 +221,7 @@ swift_authenticate(struct swift_context *context) {
   sprintf(username, "X-Storage-User: %s", context->username);
   sprintf(password, "X-Storage-Pass: %s", context->password);
 
-  headerlist = swift_set_headers(context, 2, username, password);
+  headerlist = swift_set_headers(context->curlhandle, 2, username, password);
 
   curl_easy_perform(context->curlhandle);
   curl_slist_free_all(headerlist);
@@ -224,9 +230,6 @@ swift_authenticate(struct swift_context *context) {
 
   return swift_response(response);
 }
-
-
-
 
 
 swift_error
@@ -325,10 +328,14 @@ swift_can_connect(struct swift_context *context) {
 
 }
 
-swift_error
+STATIC swift_error
 swift_node_list_setup(struct swift_context *context, const char *path) {
 
   char *url;
+
+  if (!context || !path) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
 
   url = (char *)malloc(strlen(path) + strlen(context->authurl) + 1);
   if (!url) {
@@ -344,6 +351,8 @@ swift_node_list_setup(struct swift_context *context, const char *path) {
   }
   curl_easy_reset(context->curlhandle);
   curl_easy_setopt(context->curlhandle, CURLOPT_URL, url);
+
+  free(url);
 
   return SWIFT_SUCCESS;
 }
@@ -418,10 +427,14 @@ swift_container_exists(struct swift_context *context, const char *container) {
   return e;
 }
 
-swift_error
+STATIC swift_error
 swift_create_container_setup(struct swift_context *context, const char *container) {
 
   char *url;
+
+  if (!context || !container) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
  
   url = (char *)malloc(strlen(container) + strlen(context->authurl) + 2);
   if (!url) {
@@ -456,7 +469,7 @@ swift_create_container(struct swift_context * context, const char *container) {
   return swift_response(response);
 }
 
-swift_error
+STATIC swift_error
 swift_delete_container_setup(struct swift_context *context, const char *container) {
 
   char *url;
@@ -502,7 +515,7 @@ swift_delete_container(struct swift_context * context, const char *container) {
   return swift_response(response);
 }
 
-swift_error
+STATIC swift_error
 swift_object_exists_setup(struct swift_context *context, const char *container,
     const char *object) {
 
@@ -543,9 +556,11 @@ swift_object_exists(struct swift_context *context, const char *container,
       return s_err;
     }
   }
+
   if ( (s_err = swift_object_exists_setup(context, container, object)) ) {
     return s_err;
   }
+
   response = swift_perform(context);
 
   *length = context->obj_length;

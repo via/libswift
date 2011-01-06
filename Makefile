@@ -1,12 +1,17 @@
-CFLAGS= -O0 -g  -Wall
+CFLAGS= -O0 -g  -Wall `pkg-config libcurl --cflags --libs` -I. -DUNITTEST
 CC=gcc
 
-libswift.o: swift.c swift.h
-	${CC} ${CFLAGS} -o libswift.o -c swift.c `pkg-config libcurl --cflags --libs`
 
-test: test.c libswift.o
-	${CC} ${CFLAGS} -o test test.c libswift.o  `pkg-config libcurl --cflags --libs`
+libswift.o: swift.c swift.h
+	${CC} ${CFLAGS} -o libswift.o -c swift.c 
+
+tests: tests/test_swift.c libswift.o
+	${CC} ${CFLAGS} -o tests/test_swift tests/test_swift.c libswift.o `pkg-config check --cflags --libs` 
+
+client: client.c libswift.o
+	${CC} ${CFLAGS} -o client client.c libswift.o 
 
 clean:
 	-rm *.o
-	-rm test
+	-rm client
+	-rm tests/test_swift
