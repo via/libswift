@@ -153,6 +153,35 @@ START_TEST (test_swift_header_callback_authurl) {
 }
 END_TEST
 
+START_TEST (test_swift_header_callback_counts) {
+
+  struct swift_context c;
+  c.state = SWIFT_STATE_CONTAINERLIST;
+
+  swift_header_callback("X-Account-Container-Count: 20", 1, 29, (void *)&c);
+  fail_unless(c.num_containers == 20);
+
+  swift_header_callback("X-Account-Container-Count:\n", 1, 27, (void *)&c);
+  fail_unless(c.num_containers == 20);
+
+  swift_header_callback("X-Container-Object-Count: 55\r\n", 1, 28, (void *)&c);
+  fail_unless(c.num_objects == 55);
+  fail_unless(c.num_containers == 20);
+
+  swift_header_callback("X-Container-Object-Count:\r\n", 1, 25, (void *)&c);
+  fail_unless(c.num_objects == 55);
+  fail_unless(c.num_containers == 20);
+
+  swift_header_callback("Content-Length: 17743\n", 1, 21, (void *)&c);
+  fail_unless(c.obj_length == 17743);
+
+  swift_header_callback("Content-Length:\r\n", 1, 17, (void *)&c);
+  fail_unless(c.obj_length == 17743);
+  fail_unless(c.num_objects == 55);
+  fail_unless(c.num_containers == 20);
+
+}
+END_TEST
 
 START_TEST (test_swift_create_context) {
 
@@ -190,6 +219,7 @@ Suite *swift_suite(void) {
 
   tcase_add_test(tc_cb, test_swift_header_callback_authtoken);
   tcase_add_test(tc_cb, test_swift_header_callback_authurl);
+  tcase_add_test(tc_cb, test_swift_header_callback_counts);
 
 
 

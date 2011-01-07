@@ -189,6 +189,27 @@ swift_body_callback(void *ptr, size_t size, size_t nmemb, void *user) {
   return size * nmemb;
 }
 
+STATIC size_t
+swift_upload_callback(void *ptr, size_t size, size_t nmemb, void *user) {
+
+  struct swift_context *context = (struct swift_context *)user;
+  int newbytes;
+
+  if (context->state != SWIFT_STATE_OBJECT_WRITE) {
+    return CURL_READFUNC_ABORT;
+  }
+
+  newbytes = (context->obj_length - context->buffer_pos) < size * nmemb ?
+    (context->obj_length - context->buffer_pos) :
+    size * nmemb;
+
+  memcpy(ptr, context->buffer + context->buffer_pos, newbytes);
+  context->buffer_pos += newbytes;
+
+  return newbytes;
+}
+
+  
  
 STATIC int
 swift_perform(struct swift_context *context)  {
@@ -776,6 +797,11 @@ swift_sync_setup(struct swift_transfer_handle *handle) {
       break;
     case SWIFT_WRITE:
       context->state = SWIFT_STATE_OBJECT_WRITE;
+      curl_easy_setopt(context->curlhandle, CURLOPT_UPLOAD, 1);
+      curl_easy_setopt(context->curlhandle, CURLOPT_INFILESIZE, context->obj_length);
+      curl_easy_setopt(context->curlhandle, CURLOPT_READFUNCTION, 
+          swift_upload_callback);
+      curl_easy_setopt(context->curlhandle, CURLOPT_READDATA, context);
       break;
   }
 
@@ -828,6 +854,7 @@ swift_write(struct swift_transfer_handle *handle, const void *buf, size_t nbytes
 
   memcpy(handle->ptr + handle->fpos, buf, newbytes);
   return newbytes;
+
 }
 
 size_t

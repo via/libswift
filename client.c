@@ -61,6 +61,16 @@ main(int argc, char ** argv) {
       printf("%100s\n", (char *)data);
       swift_free_transfer_handle(&h);
     }
+  } else if (strcmp(argv[1], "writeobj") == 0) {
+    struct swift_transfer_handle *h;
+    if (swift_create_object(c, argv[2], argv[3], &h, 100)) {
+      printf("Error\n");
+    } else {
+      swift_get_data(h, &data);
+      strcpy(data, "Test one two three");
+      swift_sync(h);
+      swift_free_transfer_handle(&h);
+    }
   }
 
   swift_delete_context(&c);
