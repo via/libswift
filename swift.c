@@ -368,6 +368,10 @@ swift_node_list_setup(struct swift_context *context, const char *path) {
     return SWIFT_ERROR_NOTFOUND;
   }
 
+  if (strncmp("/", path, 1) != 0) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
+
   url = (char *)malloc(strlen(path) + strlen(context->authurl) + 1);
   if (!url) {
     return SWIFT_ERROR_MEMORY;
@@ -431,7 +435,9 @@ swift_node_list_free(char ***contents) {
 
 
   free(**contents);
+  **contents = NULL;
   free(*contents);
+  *contents = NULL;
 
   return SWIFT_SUCCESS;
 
@@ -507,6 +513,10 @@ swift_delete_container_setup(struct swift_context *context, const char *containe
 
   if (!context || !container) {
     return SWIFT_ERROR_NOTFOUND;
+  }                                                                     
+
+  if (strcmp("", container) == 0) {
+    return SWIFT_ERROR_EXISTS;
   }
 
   url = (char *)malloc(strlen(container) + strlen(context->authurl) + 2);

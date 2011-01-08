@@ -183,6 +183,117 @@ START_TEST (test_swift_header_callback_counts) {
 }
 END_TEST
 
+START_TEST (test_swift_body_callback_objlist) {
+
+  struct swift_context c;
+  int retval;
+
+  memset(&c, 0, sizeof(c));
+  c.state = SWIFT_STATE_OBJECTLIST;
+  c.obj_length = 18;
+
+  retval = swift_body_callback("Test1\nTe", 2, 4, (void *)&c);
+  fail_unless(retval == 8);
+
+  retval = swift_body_callback("st2", 1, 3, (void *)&c);
+  fail_unless(retval == 3);
+
+  retval = swift_body_callback("\nTest3\n", 7, 1, (void *)&c);
+  fail_unless(retval == 7);
+
+  retval = swift_body_callback("", 0, 0, (void *)&c);
+  fail_unless(retval == 0);
+
+  fail_if(strcmp(c.buffer, "Test1\nTest2\nTest3\n") != 0);
+
+  /*Buffer is already full, this should fail */
+  retval = swift_body_callback("Test4\n", 6, 1, (void *)&c);
+  fail_unless(retval == 0);
+
+  free(c.buffer);
+}
+END_TEST
+
+START_TEST (test_swift_body_callback_objread) {
+
+  struct swift_context c;
+  char teststr[21];
+  int retval;
+
+  memset(&c, 0, sizeof(c));
+  memset(teststr, 0, 21);
+
+  c.state = SWIFT_STATE_OBJECT_READ;
+
+  retval = swift_body_callback("Test1", 5, 1, (void *)&c);
+  fail_unless(retval == 0);
+
+  c.buffer = teststr;
+  retval = swift_body_callback("Test1", 5, 1, (void *)&c);
+  fail_unless(retval == 0);
+
+  c.obj_length = 20;
+  retval = swift_body_callback("Test1", 5, 1, (void *)&c);
+  fail_unless(retval == 5);
+
+  retval = swift_body_callback("", 0, 1, (void *)&c);
+  fail_unless(retval == 0);
+
+  retval = swift_body_callback("Test2Test3", 5, 2, (void *)&c);
+  fail_unless(retval == 10);
+
+  retval = swift_body_callback("Test4Test5", 2, 5, (void *)&c);
+  fail_unless(retval == 0);
+
+  fail_if(strcmp(c.buffer, "Test1Test2Test3") != 0);
+
+}
+END_TEST
+
+START_TEST (test_swift_upload_callback) {
+
+  struct swift_context c;
+  char teststr[22];
+  char testbuf[21];
+  int retval;
+
+  memset(&c, 0, sizeof(c));
+  memset(testbuf, 0, 21);
+  c.buffer = teststr;
+  c.obj_length = 20;
+  c.state = SWIFT_STATE_AUTH;
+
+  strcpy(teststr, "Test1");
+  retval = swift_upload_callback(testbuf, 1, 5, (void *)&c);
+  fail_unless(retval == CURL_READFUNC_ABORT);
+  fail_if(strcmp("", testbuf) != 0);
+
+  c.state = SWIFT_STATE_OBJECT_WRITE;
+
+  strcpy(teststr, "Test1Test2Test3Test4A");
+
+  /*Test first word: "Test1" */
+  memset(testbuf, 0, 21);
+  retval = swift_upload_callback(testbuf, 5, 1, (void *)&c);
+  fail_unless(retval == 5);
+  fail_if(strcmp("Test1", testbuf) != 0);
+
+  /*Test rest of buffer size, "Test2Test3Test4" */
+  memset(testbuf, 0, 21);
+  retval = swift_upload_callback(testbuf, 3, 5, (void *)&c);
+  fail_unless(retval == 15);
+  fail_if(strcmp(testbuf, "Test2Test3Test4") != 0);
+
+  /*Attempt one more character after maximum size*/
+  memset(testbuf, 0, 21);
+  retval = swift_upload_callback(teststr, 1, 1, (void *)&c);
+  fail_unless(retval == 0);
+  fail_if(strcmp(testbuf, "") != 0);
+
+}
+END_TEST
+
+
 START_TEST (test_swift_create_context) {
 
   struct swift_context *c;
@@ -201,7 +312,105 @@ START_TEST (test_swift_create_context) {
 END_TEST
 
 
-  
+START_TEST (test_swift_node_list_setup) {
+
+  struct swift_context c;
+  char *url;
+
+  c.curlhandle = curl_easy_init();
+  c.authurl = "http://swiftbox";
+
+  fail_unless(swift_node_list_setup(&c, "") == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_node_list_setup(NULL, NULL) == SWIFT_ERROR_NOTFOUND);
+
+  fail_unless(swift_node_list_setup(&c, "/") == SWIFT_SUCCESS);
+  fail_unless(c.state == SWIFT_STATE_CONTAINERLIST);
+  curl_easy_getinfo(c.curlhandle, CURLINFO_EFFECTIVE_URL, &url);
+  fail_if(strcmp("http://swiftbox/", url) != 0);
+
+  fail_unless(swift_node_list_setup(&c, "/mypath") == SWIFT_SUCCESS);
+  fail_unless(c.state == SWIFT_STATE_OBJECTLIST);
+  curl_easy_getinfo(c.curlhandle, CURLINFO_EFFECTIVE_URL, &url);
+  fail_if(strcmp("http://swiftbox/mypath", url) != 0);
+
+  curl_easy_cleanup(c.curlhandle);
+
+}
+END_TEST
+
+START_TEST (test_swift_node_list_free) {
+
+  char *string;
+  char **list;
+
+  string = (char *)malloc(64);
+  list = (char **)malloc(sizeof(char *) * 5);
+  strcpy(string, "Test1\0Test2\0Test3\0Test4");
+
+  list[0] = &string[0];
+  list[1] = &string[6];
+  list[2] = &string[12];
+  list[3] = &string[18];
+  list[4] = NULL;
+  swift_node_list_free(&list);
+
+  fail_unless(list == NULL);
+
+}
+END_TEST
+
+START_TEST (test_swift_create_container_setup) {
+
+  struct swift_context c;
+  char *data;
+
+  fail_unless(swift_create_container_setup(NULL, "test") == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_create_container_setup(&c, NULL) == SWIFT_ERROR_NOTFOUND);
+
+  c.curlhandle = curl_easy_init();
+  c.authurl = "http://swiftbox";
+
+  fail_if(swift_create_container_setup(&c, "") != SWIFT_SUCCESS);
+  fail_unless(c.state == SWIFT_STATE_CONTAINER_CREATE);
+  curl_easy_getinfo(c.curlhandle, CURLINFO_EFFECTIVE_URL, &data);
+  fail_if(strcmp(data, "http://swiftbox/") != 0);
+
+  fail_if(swift_create_container_setup(&c, "testcont") != SWIFT_SUCCESS);
+  fail_unless(c.state == SWIFT_STATE_CONTAINER_CREATE);
+  curl_easy_getinfo(c.curlhandle, CURLINFO_EFFECTIVE_URL, &data);
+  fail_if(strcmp(data, "http://swiftbox/testcont") != 0);
+
+  curl_easy_cleanup(c.curlhandle);
+
+}
+END_TEST
+
+
+START_TEST (test_swift_delete_container_setup) {
+
+  struct swift_context c;
+  char *data;
+
+  fail_unless(swift_delete_container_setup(NULL, "test") == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_delete_container_setup(&c, NULL) == SWIFT_ERROR_NOTFOUND);
+
+  c.curlhandle = curl_easy_init();
+  c.authurl = "http://swiftbox";
+
+  fail_if(swift_delete_container_setup(&c, "") != SWIFT_ERROR_EXISTS);
+  fail_unless(c.state == SWIFT_STATE_CONTAINER_DELETE);
+  curl_easy_getinfo(c.curlhandle, CURLINFO_EFFECTIVE_URL, &data);
+  fail_if(strcmp(data, "http://swiftbox/") != 0);
+
+  fail_if(swift_delete_container_setup(&c, "testcont") != SWIFT_SUCCESS);
+  fail_unless(c.state == SWIFT_STATE_CONTAINER_DELETE);
+  curl_easy_getinfo(c.curlhandle, CURLINFO_EFFECTIVE_URL, &data);
+  fail_if(strcmp(data, "http://swiftbox/testcont") != 0);
+
+  curl_easy_cleanup(c.curlhandle);
+
+}
+END_TEST
 
 
 Suite *swift_suite(void) {
@@ -216,10 +425,17 @@ Suite *swift_suite(void) {
   tcase_add_test(tc_core, test_swift_string_to_list);
 
   tcase_add_test(tc_api, test_swift_create_context);
+  tcase_add_test(tc_api, test_swift_node_list_setup);
+  tcase_add_test(tc_api, test_swift_node_list_free);
+  tcase_add_test(tc_api, test_swift_create_container_setup);
+  tcase_add_test(tc_api, test_swift_delete_container_setup);
 
   tcase_add_test(tc_cb, test_swift_header_callback_authtoken);
   tcase_add_test(tc_cb, test_swift_header_callback_authurl);
   tcase_add_test(tc_cb, test_swift_header_callback_counts);
+  tcase_add_test(tc_cb, test_swift_body_callback_objlist);
+  tcase_add_test(tc_cb, test_swift_body_callback_objread);
+  tcase_add_test(tc_cb, test_swift_upload_callback);
 
 
 
@@ -234,7 +450,7 @@ int main(void) {
   int n_failed;
   Suite *s = swift_suite();
   SRunner *sr = srunner_create(s);
-  srunner_run_all(sr, CK_VERBOSE);
+  srunner_run_all(sr, CK_NORMAL);
   n_failed = srunner_ntests_failed(sr);
   srunner_free(sr);
   return (n_failed == 0) ? EXIT_SUCCESS: EXIT_FAILURE;
