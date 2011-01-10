@@ -214,7 +214,7 @@ swift_upload_callback(void *ptr, size_t size, size_t nmemb, void *user) {
 STATIC int
 swift_perform(struct swift_context *context)  {
 
-  int response;
+  long response;
   struct curl_slist *headers = NULL;
 
   headers = swift_set_headers(context->curlhandle, 1, context->authtoken);
@@ -233,7 +233,7 @@ STATIC swift_error
 swift_authenticate(struct swift_context *context) {
   
   struct curl_slist *headerlist = NULL;
-  unsigned long response;
+  long response;
   char username[64];
   char password[64];
 
