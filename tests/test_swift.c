@@ -415,6 +415,30 @@ START_TEST (test_swift_delete_container_setup) {
 END_TEST
 
 
+START_TEST (test_swift_object_exists_setup) {
+
+  struct swift_context c;
+  char *data;
+
+  fail_unless(swift_object_exists_setup(NULL, "", "") == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_object_exists_setup(&c, NULL, "") == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_object_exists_setup(&c, "", NULL) == SWIFT_ERROR_NOTFOUND);
+
+  c.curlhandle = curl_easy_init();
+  c.authurl = "http://swiftbox";
+
+
+  fail_if(swift_object_exists_setup(&c, "testcont", "testobj") != SWIFT_SUCCESS);
+  fail_unless(c.state == SWIFT_STATE_OBJECT_EXISTS);
+  curl_easy_getinfo(c.curlhandle, CURLINFO_EFFECTIVE_URL, &data);
+  fail_if(strcmp(data, "http://swiftbox/testcont/testobj") != 0);
+
+  curl_easy_cleanup(c.curlhandle);
+
+}
+END_TEST
+
+
 Suite *swift_suite(void) {
   Suite *s = suite_create("libswift");
   TCase *tc_core = tcase_create("Internal functions");
@@ -431,6 +455,7 @@ Suite *swift_suite(void) {
   tcase_add_test(tc_api, test_swift_node_list_free);
   tcase_add_test(tc_api, test_swift_create_container_setup);
   tcase_add_test(tc_api, test_swift_delete_container_setup);
+  tcase_add_test(tc_api, test_swift_object_exists_setup);
 
   tcase_add_test(tc_cb, test_swift_header_callback_authtoken);
   tcase_add_test(tc_cb, test_swift_header_callback_authurl);

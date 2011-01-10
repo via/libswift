@@ -13,7 +13,6 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_ARG_ENABLE([unittest], AS_HELP_STRING([--enable-unittest],[enable exposed internal funcs for unit testing]))
 AM_CONDITIONAL([UNITTEST], [test "x$enable_unittest" = "xyes"])
 AS_IF([test "x$enable_unittest" = "xyes"], [
-       AC_MSG_WARN([Units!])
        AC_DEFINE([UNITTEST], [1], [Expose static functions for unit testing])
        ])
 # Checks for programs.
