@@ -5,6 +5,10 @@
 #include "../src/swift.h"
 #include "../src/swift_private.h"
 
+#ifndef UNITTEST
+#error Must configure with --enable-unittest
+#endif
+
 
 
 START_TEST (test_swift_response) {
@@ -399,9 +403,6 @@ START_TEST (test_swift_delete_container_setup) {
   c.authurl = "http://swiftbox";
 
   fail_if(swift_delete_container_setup(&c, "") != SWIFT_ERROR_EXISTS);
-  fail_unless(c.state == SWIFT_STATE_CONTAINER_DELETE);
-  curl_easy_getinfo(c.curlhandle, CURLINFO_EFFECTIVE_URL, &data);
-  fail_if(strcmp(data, "http://swiftbox/") != 0);
 
   fail_if(swift_delete_container_setup(&c, "testcont") != SWIFT_SUCCESS);
   fail_unless(c.state == SWIFT_STATE_CONTAINER_DELETE);

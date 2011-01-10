@@ -778,7 +778,7 @@ swift_read_object(struct swift_context *context, const char *container,
   return swift_sync(l_handle);
 }
 
-swift_error
+STATIC swift_error
 swift_sync_setup(struct swift_transfer_handle *handle) {
 
   struct swift_context *context = handle->parent;
