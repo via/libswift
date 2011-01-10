@@ -1,8 +1,9 @@
 #include <check.h>
 #include <stdlib.h>
-#include <swift.h>
-#include <swift_private.h>
 #include <curl/curl.h>
+
+#include "../src/swift.h"
+#include "../src/swift_private.h"
 
 
 

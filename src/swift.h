@@ -2,6 +2,7 @@
 #define MAIN_H
 
 #include <curl/curl.h>
+#include <config.h>
 
 typedef enum {
   SWIFT_SUCCESS = 0,

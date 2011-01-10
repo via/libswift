@@ -9,6 +9,8 @@ AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile src/Makefile tests/Makefile])
 AC_CONFIG_MACRO_DIR([m4])
 
+AC_DEFINE([UNITTEST], [1], [Enable Unit Tests])
+
 # Checks for programs.
 AC_PROG_CC
 AC_PROG_LIBTOOL
