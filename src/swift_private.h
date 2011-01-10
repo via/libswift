@@ -3,6 +3,14 @@
       
 #ifdef UNITTEST
 #define STATIC
+
+#define curl_easy_perform(handle) test_curl_easy_perform(handle)
+#define curl_easy_init() test_curl_easy_init()
+#define curl_easy_cleanup(handle) test_curl_easy_cleanup(handle)
+#define curl_easy_getinfo(handle,tag,data) test_curl_easy_getinfo(handle,tag,data)
+#define curl_easy_reset(handle) test_curl_easy_reset(handle)
+#define curl_easy_setopt(handle,option,param) test_curl_easy_setopt(handle,option,param)
+
 #else
 #define STATIC static
 #endif
