@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include "curl_mockups.h"
 
@@ -65,61 +66,67 @@ CURLcode test_curl_easy_getinfo(CURL *curl, CURLINFO info, void *data) {
   return CURLE_OK;
 }
 
-CURLcode test_curl_easy_setopt(CURL *handle, CURLoption option, void *data) {
+CURLcode test_curl_easy_setopt(CURL *handle, CURLoption option, ...) {
+
+  va_list args;
+  va_start(args, option);
 
   switch(option) {
     case CURLOPT_WRITEFUNCTION:
-      params.writefunc = data;
+      params.writefunc = va_arg(args, curl_write_callback);
       break;
     case CURLOPT_WRITEDATA:
-      params.writedata = data;
+      params.writedata = va_arg(args, void *);
       break;
     case CURLOPT_READFUNCTION:
-      params.readfunc = data;
+      params.readfunc = va_arg(args, curl_read_callback);
       break;
     case CURLOPT_READDATA:
-      params.readdata = data;
+      params.readdata = va_arg(args, void *);
       break;
     case CURLOPT_HEADERFUNCTION:
-      params.headerfunc = data;
+      params.headerfunc = va_arg(args, curl_write_callback);
       break;
     case CURLOPT_WRITEHEADER:
-      params.headerdata = data;
+      params.headerdata = va_arg(args, void *);
       break;
     case CURLOPT_URL:
       free(params.url);
-      params.url = (char *)malloc(strlen((char *)data) + 1);
-      strcpy(params.url, (char *)data);
+      char *url = va_arg(args, char *);
+      params.url = (char *)malloc(strlen(url) + 1);
+      strcpy(params.url, url);
       break;
     case CURLOPT_CUSTOMREQUEST:
       free(params.request);
-      params.request = (char *)malloc(strlen((char *)data) + 1);
-      strcpy(params.request, (char *)data);
+      char *req = va_arg(args, char *);
+      params.request = (char *)malloc(strlen(req) + 1);
+      strcpy(params.request, req);
       break;
     case CURLOPT_HTTPHEADER:
       if (params.headers != NULL) {
         curl_slist_free_all(params.headers);
         params.headers = NULL;
       }
-      struct curl_slist *node = (struct curl_slist *)data;
+      struct curl_slist *node = va_arg(args, struct curl_slist *);
       while (node != NULL) {
         params.headers = curl_slist_append(params.headers, node->data);
         node = node->next;
       }
       break;
     case CURLOPT_NOBODY:
-      params.nobody = ((int)data);
+      params.nobody = va_arg(args, int);
       break;
     case CURLOPT_INFILESIZE:
-      params.infilesize = ((int)data);
+      params.infilesize = va_arg(args, int);
       break;
     case CURLOPT_UPLOAD:
-      params.upload = ((int)data);
+      params.upload = va_arg(args, int);
       break;
     default:
       printf("Unhandled options!\n");
       exit(EXIT_FAILURE);
   }
+  va_end(args);
   return CURLE_OK;
 }
 

@@ -10,7 +10,7 @@
 #define curl_easy_getinfo(handle,tag,data) test_curl_easy_getinfo(handle,tag,data)
 #define curl_easy_reset(handle) test_curl_easy_reset(handle)
 #define curl_easy_setopt(handle,option,param) test_curl_easy_setopt(handle,option,param)
-
+#include "curl_mockups.h"
 #else
 #define STATIC static
 #endif

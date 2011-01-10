@@ -11,9 +11,9 @@ struct test_curl_params {
   void *readdata;
   void *writedata;
   void *headerdata;
-  size_t (*readfunc)(void *, size_t, size_t, void *);
-  size_t (*writefunc)(void *, size_t, size_t, void *);
-  size_t (*headerfunc)(void *, size_t, size_t, void *);
+  curl_read_callback readfunc;
+  curl_write_callback writefunc;
+  curl_write_callback headerfunc;
   
   struct curl_slist *headers;
 
@@ -27,7 +27,7 @@ void test_curl_easy_reset(CURL *);
 CURL *test_curl_easy_init();
 void test_curl_easy_cleanup(CURL *);
 CURLcode test_curl_easy_getinfo(CURL *, CURLINFO, void *);
-CURLcode test_curl_easy_setopt(CURL *, CURLoption, void *);
+CURLcode test_curl_easy_setopt(CURL *, CURLoption, ...);
 
 struct test_curl_params *test_curl_getparams(); 
 

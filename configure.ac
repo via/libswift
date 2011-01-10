@@ -1,7 +1,6 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.68])
 AC_INIT([libswift], [0.01], [matthew.via@mailtrust.com])
 AM_INIT_AUTOMAKE([foreign -Wall -Werror])
 LT_INIT
