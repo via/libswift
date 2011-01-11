@@ -14,6 +14,23 @@ AM_CONDITIONAL([UNITTEST], [test "x$enable_unittest" = "xyes"])
 AS_IF([test "x$enable_unittest" = "xyes"], [
        AC_DEFINE([UNITTEST], [1], [Expose static functions for unit testing])
        ])
+
+AC_ARG_ENABLE([integration],
+            AS_HELP_STRING([--enable-integration=username,password,url],[enable
+             integration testing with given server options]),
+             [integration=$enableval],
+             [integration=no])
+AS_IF([test "x$integration" != "xno"], [
+       AS_IF([test "x$enable_unittest" = "xyes"], [
+              integration=no
+              ])
+       ])
+AM_CONDITIONAL([INTEGRATION], [test "x$integration" != "xno"])
+AS_IF([test "x$integration" != "xno"], [
+       AC_DEFINE_UNQUOTED([INTEGRATION], "$integration", [Login information for
+                  integration test server])
+       ])
+
 # Checks for programs.
 AC_PROG_CC
 AC_PROG_LIBTOOL
