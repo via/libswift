@@ -232,25 +232,29 @@ swift_perform(struct swift_context *context)  {
 STATIC swift_error
 swift_authenticate(struct swift_context *context) {
   
+
   struct curl_slist *headerlist = NULL;
   long response;
-  char username[64];
-  char password[64];
+  const char *usertag = "X-Storage-User: ";
+  const char *passtag = "X-Storage-Pass: ";
+  char *username = NULL;
+  char *password = NULL;
+
+  if (!context || !context->username || !context->password) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
+
+  username = (char *)malloc(strlen(context->username) + 
+      strlen(usertag) + 1);
+  password = (char *)malloc(strlen(context->password) + 
+      strlen(passtag) + 1);
 
   context->valid_auth = 0;
   context->state = SWIFT_STATE_AUTH;
   curl_easy_reset(context->curlhandle);
 
-  curl_easy_setopt(context->curlhandle, CURLOPT_HEADERFUNCTION, 
-      swift_header_callback);
-  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEHEADER, context);
-  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEFUNCTION,
-      swift_body_callback);
-  curl_easy_setopt(context->curlhandle, CURLOPT_URL, context->connecturl);
-
-
-  sprintf(username, "X-Storage-User: %s", context->username);
-  sprintf(password, "X-Storage-Pass: %s", context->password);
+  sprintf(username, "%s%s", usertag, context->username);
+  sprintf(password, "%s%s", passtag, context->password);
 
   headerlist = swift_set_headers(context->curlhandle, 2, username, password);
 
@@ -258,6 +262,9 @@ swift_authenticate(struct swift_context *context) {
   curl_slist_free_all(headerlist);
 
   curl_easy_getinfo(context->curlhandle, CURLINFO_RESPONSE_CODE, &response);
+
+  free(username);
+  free(password);
 
   return swift_response(response);
 }
@@ -859,6 +866,7 @@ swift_read(struct swift_transfer_handle *handle, void *buf, size_t nbytes) {
     nbytes;
 
   memcpy(buf, handle->ptr + handle->fpos, newbytes);
+  handle->fpos += newbytes;
   return newbytes;
 }
 
@@ -875,6 +883,7 @@ swift_write(struct swift_transfer_handle *handle, const void *buf, size_t nbytes
     nbytes;
 
   memcpy(handle->ptr + handle->fpos, buf, newbytes);
+  handle->fpos += newbytes;
   return newbytes;
 
 }
@@ -891,7 +900,9 @@ swift_get_data(struct swift_transfer_handle *handle, void **ptr) {
 void
 swift_seek(struct swift_transfer_handle *handle, unsigned long pos) {
 
-  handle->fpos = pos;
+  if (pos < handle->length) {
+    handle->fpos = pos;
+  }
 
 }
   

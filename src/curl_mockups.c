@@ -33,8 +33,6 @@ void test_curl_easy_reset(CURL *handle) {
     params.headers = NULL;
   }
 
-  params.response_code = 0;
-  
 }
 
 

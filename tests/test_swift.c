@@ -13,6 +13,19 @@
 #endif
 
 
+int slist_contains(struct curl_slist *list, const char *str) {
+
+  struct curl_slist *cur_entry = list;
+
+  while (cur_entry != NULL) {
+    if (strcmp(cur_entry->data, str) != 0) {
+      return 1;
+    }
+    cur_entry = cur_entry->next;
+  }
+  return 0;
+}
+
 START_TEST (test_swift_response) {
   
   fail_unless(swift_response(200) == SWIFT_SUCCESS);
@@ -121,14 +134,17 @@ START_TEST (test_swift_header_callback_authtoken) {
   swift_header_callback("X-Auth-Token: ABCDEFG\n", 1, 22, (void *)&c);
   fail_if(c.authtoken == NULL);
   fail_if( strcmp(c.authtoken, "X-Auth-Token: ABCDEFG") != 0);
+  fail_unless(c.valid_auth == 1);
 
   swift_header_callback("X-Auth-Token:BADDATA\r\n", 1, 22, (void *)&c);
   fail_if(c.authtoken == NULL);
   fail_if( strcmp(c.authtoken, "X-Auth-Token: ABCDEFG") != 0);
+  fail_unless(c.valid_auth == 1);
 
-  swift_header_callback("X-Auth-Token: AAAAAAAAAAAAAAAAAAAAAA\r\n", 2, 18, (void *)&c);
+  swift_header_callback("X-Auth-Token: AAAAAAAAAAAAAAAAAAAAAA\r\n", 2, 18, &c);
   fail_if(c.authtoken == NULL);
   fail_if( strcmp(c.authtoken, "X-Auth-Token: AAAAAAAAAAAAAAAAAAAAAA") != 0);
+  fail_unless(c.valid_auth == 1);
 
   free(c.authtoken);
 }
@@ -548,8 +564,10 @@ START_TEST (test_swift_sync_setup_read) {
   struct test_curl_params *params = test_curl_getparams();
   char tempbuf[100];
 
-  fail_unless(swift_sync_setup(NULL) != SWIFT_ERROR_NOTFOUND);
-  fail_unless(swift_sync_setup(&h) != SWIFT_ERROR_NOTFOUND);
+  memset(&h, 0, sizeof(h));
+
+  fail_unless(swift_sync_setup(NULL) == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_sync_setup(&h) == SWIFT_ERROR_NOTFOUND);
 
   c.authurl = "http://swiftbox";
 
@@ -558,10 +576,232 @@ START_TEST (test_swift_sync_setup_read) {
   h.object = "testobj";
   h.ptr = tempbuf;
   h.length = 100;
+  h.mode = SWIFT_READ;
 
   fail_unless(swift_sync_setup(&h) == SWIFT_SUCCESS);
+  fail_if(strcmp(params->url, "http://swiftbox/testcont/testobj") != 0);
+  fail_unless(c.state == SWIFT_STATE_OBJECT_READ);
+  fail_unless(c.buffer == h.ptr);
+  fail_unless(c.buffer_pos == 0);
+  fail_unless(c.obj_length == 100);
+  fail_unless(params->upload == 0);
 
-  /* NOT DONE */
+}
+END_TEST
+
+
+START_TEST (test_swift_sync_setup_write) {
+
+  struct swift_context c;
+  struct swift_transfer_handle h;
+  struct test_curl_params *params = test_curl_getparams();
+  char tempbuf[100];
+
+  memset(&h, 0, sizeof(h));
+
+  fail_unless(swift_sync_setup(NULL) == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_sync_setup(&h) == SWIFT_ERROR_NOTFOUND);
+
+  c.authurl = "http://swiftbox";
+
+  h.parent = &c;
+  h.container = "testcont";
+  h.object = "testobj";
+  h.ptr = tempbuf;
+  h.length = 100;
+  h.mode = SWIFT_WRITE;
+
+  fail_unless(swift_sync_setup(&h) == SWIFT_SUCCESS);
+  fail_if(strcmp(params->url, "http://swiftbox/testcont/testobj") != 0);
+  fail_unless(c.state == SWIFT_STATE_OBJECT_WRITE);
+  fail_unless(c.buffer == h.ptr);
+  fail_unless(c.buffer_pos == 0);
+  fail_unless(c.obj_length == 100);
+  fail_unless(params->upload == 1);
+  fail_unless(params->infilesize == 100);
+  fail_unless(params->readfunc == (curl_read_callback)swift_upload_callback);
+  fail_unless(params->readdata == &c);
+
+}
+END_TEST
+
+START_TEST (test_swift_perform) {
+
+  const char *token = "AUTHTOKEN";
+  const int response = 200;
+
+  struct swift_context c;
+  struct test_curl_params *params = test_curl_getparams();
+
+  test_curl_easy_reset(&c);
+  c.authtoken = (char *)malloc(strlen(token) + 1);
+  strcpy(c.authtoken, token);
+  params->response_code = response;
+
+  fail_unless(swift_perform(&c) == response);
+  fail_unless(params->headerfunc == (curl_write_callback)swift_header_callback);
+  fail_unless(params->headerdata == &c);
+  fail_unless(params->writefunc == (curl_write_callback)swift_body_callback);
+  fail_unless(params->writedata == &c);
+  
+  fail_if(params->headers == NULL);
+  fail_if(strcmp(params->headers->data, token) != 0);
+  fail_unless(params->headers->next == NULL);
+
+  test_curl_easy_reset(&c);
+  free(c.authtoken);
+
+}
+END_TEST
+
+
+START_TEST (test_swift_authenticate) {
+
+  char *user = "testuser";
+  char *pass = "testpass";
+  const int response = 200;
+
+  struct swift_context c;
+  struct test_curl_params *params = test_curl_getparams();
+
+  memset(&c, 0, sizeof(c));
+  test_curl_easy_reset(&c);
+  params->response_code = response;
+
+  /* Test degenerates */
+  fail_unless(swift_authenticate(NULL) == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_authenticate(&c) == SWIFT_ERROR_NOTFOUND);
+
+  c.username = user;
+  c.password = pass;
+  fail_unless(swift_authenticate(&c) == SWIFT_SUCCESS);
+  fail_unless(c.valid_auth == 0);
+  fail_unless(c.state == SWIFT_STATE_AUTH);
+  fail_unless(slist_contains(params->headers, "X-Storage-User: testuser"));
+  fail_unless(slist_contains(params->headers, "X-Storage-Pass: testpass"));
+
+  test_curl_easy_reset(&c);
+
+}
+END_TEST
+
+
+START_TEST (test_swift_read) {
+  
+  struct swift_transfer_handle h;
+  char testbuf[20];
+  int nbytes = 20;
+
+  /* Degenerates */
+  fail_unless(swift_read(NULL, testbuf, nbytes) == 0);
+  fail_unless(swift_read(&h, NULL, nbytes) == 0);
+
+  h.length = 20;
+  h.fpos = 0;
+  h.ptr = malloc(40);
+  memset(h.ptr, 0, 40);
+  memset(testbuf, 0, 20);
+  memcpy(h.ptr, "ABCDEFGHIJKLMNOPQRST", 20);
+  
+  fail_unless(swift_read(&h, testbuf, 10) == 10);
+  fail_if(memcmp(testbuf, "ABCDEFGHIJ", 10) != 0);
+  fail_if(memcmp(testbuf + 10, "\0\0\0\0\0\0\0\0\0\0", 10) != 0);
+
+  fail_unless(swift_read(&h, testbuf, 10) == 10);
+  fail_if(memcmp(testbuf, "KLMNOPQRST", 10) != 0);
+  fail_if(memcmp(testbuf + 10, "\0\0\0\0\0\0\0\0\0\0", 10) != 0);
+
+  fail_unless(swift_read(&h, testbuf, 1) == 0);
+  fail_unless(h.fpos == 20);
+
+  h.fpos = 0;
+  fail_unless(swift_read(&h, testbuf, 21) == 20);
+  fail_unless(h.fpos == 20);
+  fail_unless(swift_read(&h, testbuf, 20) == 0);
+
+  free(h.ptr);
+
+}
+END_TEST
+
+
+START_TEST (test_swift_write) {
+
+  struct swift_transfer_handle h;
+  char destbuf[20];
+  int nbytes = 20;
+
+  /* Degenerates */
+  fail_unless(swift_write(NULL, destbuf, nbytes) == 0);
+  fail_unless(swift_write(&h, NULL, nbytes) == 0);
+
+  h.length = 20;
+  h.fpos = 0;
+  h.ptr = destbuf;
+  memset(h.ptr, 0, 20);
+
+  fail_unless(swift_write(&h, "ABCDEFGHIJ", 10) == 10);
+  fail_unless(memcmp(destbuf, "ABCDEFGHIJ", 10) == 0);
+  fail_unless(memcmp(destbuf + 10, "\0\0\0\0\0\0\0\0\0\0", 10) == 0);
+  fail_unless(h.fpos == 10);
+
+  fail_unless(swift_write(&h, "KLMNOPQRST", 10) == 10);
+  fail_unless(memcmp(destbuf, "ABCDEFGHIJKLMNOPQRST", 20) == 0);
+  fail_unless(h.fpos == 20);
+
+
+  fail_unless(swift_write(&h, "A", 1) == 0);
+  fail_unless(h.fpos == 20);
+
+  h.fpos = 0;
+  fail_unless(swift_write(&h, "ABCDEFGHIJKLMNOPQRST123", 23) == 20);
+  fail_unless(h.fpos == 20);
+  fail_unless(memcmp(destbuf, "ABCDEFGHIJKLMNOPQRST", 20) == 0);
+
+}
+END_TEST
+
+
+START_TEST (test_swift_seek) {
+
+  struct swift_transfer_handle h;
+  h.length = 20;
+  
+  swift_seek(&h, 0);
+  fail_unless(h.fpos == 0);
+
+  swift_seek(&h, 1);
+  fail_unless(h.fpos == 1);
+
+  swift_seek(&h, 19);
+  fail_unless(h.fpos == 19);
+
+  swift_seek(&h, 20);
+  fail_unless(h.fpos == 19);
+
+  swift_seek(&h, 21);
+  fail_unless(h.fpos == 19);
+
+}
+END_TEST
+
+
+START_TEST (test_swift_get_data) {
+
+  struct swift_transfer_handle h;
+  void *ptr;
+  char testdata;
+
+  h.ptr = NULL;
+  h.length = 10;
+
+  fail_unless(swift_get_data(&h, &ptr) == 10);
+  fail_unless(ptr == NULL);
+
+  h.ptr = &testdata;
+  fail_unless(swift_get_data(&h, &ptr) == 10);
+  fail_unless(ptr == &testdata);
+
 }
 END_TEST
 
@@ -587,6 +827,13 @@ Suite *swift_suite(void) {
   tcase_add_test(tc_api, test_swift_free_transfer_handle);
   tcase_add_test(tc_api, test_swift_create_transfer_handle);
   tcase_add_test(tc_api, test_swift_sync_setup_read);
+  tcase_add_test(tc_api, test_swift_sync_setup_write);
+  tcase_add_test(tc_api, test_swift_perform);
+  tcase_add_test(tc_api, test_swift_authenticate);
+  tcase_add_test(tc_api, test_swift_read);
+  tcase_add_test(tc_api, test_swift_write);
+  tcase_add_test(tc_api, test_swift_seek);
+  tcase_add_test(tc_api, test_swift_get_data);
 
   tcase_add_test(tc_cb, test_swift_header_callback_authtoken);
   tcase_add_test(tc_cb, test_swift_header_callback_authurl);

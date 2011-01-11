@@ -4,6 +4,9 @@
 #ifdef UNITTEST
 #define STATIC
 
+#undef curl_easy_getinfo
+#undef curl_easy_setopt
+
 #define curl_easy_perform(handle) test_curl_easy_perform(handle)
 #define curl_easy_init() test_curl_easy_init()
 #define curl_easy_cleanup(handle) test_curl_easy_cleanup(handle)
