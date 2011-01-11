@@ -670,7 +670,8 @@ swift_free_transfer_handle(struct swift_transfer_handle **handle) {
   free(l_handle->object);
   free(l_handle->container);
   free(l_handle);
-
+  l_handle = NULL;
+  *handle = NULL;
 }
   
 
@@ -679,6 +680,11 @@ swift_create_transfer_handle(struct swift_context *context, const char *containe
     const char *object, struct swift_transfer_handle **handle, unsigned long length) {
 
   struct swift_transfer_handle *l_handle;
+
+  if ( !context || !container || !object ||
+      !handle) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
 
   *handle = (struct swift_transfer_handle *)
     malloc(sizeof(struct swift_transfer_handle));
@@ -781,8 +787,14 @@ swift_read_object(struct swift_context *context, const char *container,
 STATIC swift_error
 swift_sync_setup(struct swift_transfer_handle *handle) {
 
-  struct swift_context *context = handle->parent;
+  struct swift_context *context;
   char *url;
+
+  if (!handle) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
+
+  context = handle->parent;
 
   if (!context || !handle->container || !handle->object) {
     return SWIFT_ERROR_NOTFOUND;

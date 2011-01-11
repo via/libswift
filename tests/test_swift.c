@@ -449,6 +449,123 @@ START_TEST (test_swift_object_exists_setup) {
 END_TEST
 
 
+START_TEST (test_swift_delete_object_setup) {
+
+  struct swift_context c;
+  char *data;
+  struct test_curl_params *params = test_curl_getparams();
+
+  fail_unless(swift_delete_object_setup(NULL, "", "") == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_delete_object_setup(&c, NULL, "") == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_delete_object_setup(&c, "", NULL) == SWIFT_ERROR_NOTFOUND);
+
+  c.curlhandle = curl_easy_init();
+  c.authurl = "http://swiftbox";
+
+  fail_if(swift_delete_object_setup(&c, "testcont", "testobj") != SWIFT_SUCCESS);
+  fail_unless(c.state == SWIFT_STATE_OBJECT_DELETE);
+  fail_if(strcmp(params->request, "DELETE") != 0);
+  curl_easy_getinfo(c.curlhandle, CURLINFO_EFFECTIVE_URL, &data);
+  fail_if(strcmp(data, "http://swiftbox/testcont/testobj") != 0);
+
+  curl_easy_cleanup(c.curlhandle);
+}
+END_TEST
+
+
+START_TEST (test_swift_free_transfer_handle) {
+
+  struct swift_transfer_handle *handle = NULL;
+
+  /* Can't test a return value, but this will at least make sure
+   * the function doesn't segfault */
+  swift_free_transfer_handle(NULL);
+  swift_free_transfer_handle(&handle);
+
+  handle = (struct swift_transfer_handle *)malloc(
+      sizeof(struct swift_transfer_handle));
+
+  handle->ptr = malloc(1);
+  handle->object = malloc(1);
+  handle->container = malloc(1);
+
+  swift_free_transfer_handle(&handle);
+  fail_unless(handle == NULL);
+
+}
+END_TEST
+
+
+START_TEST (test_swift_create_transfer_handle) {
+
+  struct swift_transfer_handle *handle = NULL;
+  struct swift_context context;
+
+  const char * obj = "testobj";
+  const char * cont = "testcont";
+  const int n_bytes = 100;
+
+  char * tempobj = NULL;
+  char * tempcont = NULL;
+
+  fail_unless(swift_create_transfer_handle(&context, NULL, "", &handle, 0) ==
+      SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_create_transfer_handle(NULL, "", "", &handle, 0) ==
+      SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_create_transfer_handle(&context, "", NULL, &handle, 0) ==
+      SWIFT_ERROR_NOTFOUND);                            
+  fail_unless(swift_create_transfer_handle(&context, "", "", NULL, 0) ==
+      SWIFT_ERROR_NOTFOUND);                            
+
+  tempobj = (char *)malloc(strlen(obj) + 1);
+  tempcont = (char *)malloc(strlen(cont) + 1);
+  strcpy(tempobj, obj);
+  strcpy(tempcont, cont);
+
+  fail_if(swift_create_transfer_handle(&context, tempcont, tempobj,
+        &handle, n_bytes) != SWIFT_SUCCESS);
+  free(tempobj);
+  free(tempcont); /*Function must make its own copy */
+
+
+  fail_if(strcmp(handle->container, cont) != 0);
+  fail_if(strcmp(handle->object, obj) != 0);
+  fail_unless(handle->parent == &context);
+  fail_unless(handle->length == n_bytes);
+  fail_unless(handle->fpos == 0);
+
+  /* We should be able to set 100 bytes of data, no segfaults */
+  memset(handle->ptr, 0, n_bytes);
+
+}
+END_TEST
+
+
+START_TEST (test_swift_sync_setup_read) {
+
+  struct swift_context c;
+  struct swift_transfer_handle h;
+  struct test_curl_params *params = test_curl_getparams();
+  char tempbuf[100];
+
+  fail_unless(swift_sync_setup(NULL) != SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_sync_setup(&h) != SWIFT_ERROR_NOTFOUND);
+
+  c.authurl = "http://swiftbox";
+
+  h.parent = &c;
+  h.container = "testcont";
+  h.object = "testobj";
+  h.ptr = tempbuf;
+  h.length = 100;
+
+  fail_unless(swift_sync_setup(&h) == SWIFT_SUCCESS);
+
+  /* NOT DONE */
+}
+END_TEST
+
+
 Suite *swift_suite(void) {
   Suite *s = suite_create("libswift");
   TCase *tc_core = tcase_create("Internal functions");
@@ -466,6 +583,10 @@ Suite *swift_suite(void) {
   tcase_add_test(tc_api, test_swift_create_container_setup);
   tcase_add_test(tc_api, test_swift_delete_container_setup);
   tcase_add_test(tc_api, test_swift_object_exists_setup);
+  tcase_add_test(tc_api, test_swift_delete_object_setup);
+  tcase_add_test(tc_api, test_swift_free_transfer_handle);
+  tcase_add_test(tc_api, test_swift_create_transfer_handle);
+  tcase_add_test(tc_api, test_swift_sync_setup_read);
 
   tcase_add_test(tc_cb, test_swift_header_callback_authtoken);
   tcase_add_test(tc_cb, test_swift_header_callback_authurl);
