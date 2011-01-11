@@ -37,7 +37,7 @@ AC_PROG_LIBTOOL
 
 # Checks for libraries.
 PKG_CHECK_MODULES(CURL, libcurl)
-AS_IF([test "x$enable_unittest" = "xyes"], [
+AS_IF([test "x$enable_unittest" = "xyes" -o "x$integration" = "xyes" ], [
   PKG_CHECK_MODULES([check], [check >= 0.9.4])
   ])
 
