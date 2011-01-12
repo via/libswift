@@ -8,6 +8,31 @@
 #include "swift.h"
 #include "swift_private.h"
 
+const char *
+swift_errormsg(swift_error e) {
+
+  switch(e) {
+    case SWIFT_SUCCESS:
+      return "Operation Successful";
+    case SWIFT_ERROR_CONNECT:
+      return "Could not connect";
+    case SWIFT_ERROR_NOTFOUND:
+      return "Could not find item";
+    case SWIFT_ERROR_UNKNOWN:
+      return "Unknown error";
+    case SWIFT_ERROR_PERMISSIONS:
+      return "Operation not permitted";
+    case SWIFT_ERROR_INTERNAL:
+      return "Internal error";
+    case SWIFT_ERROR_MEMORY:
+      return "Could not allocate memory";
+    case SWIFT_ERROR_EXISTS:
+      return "Object/Container exists";
+    default:
+      return "Undefined error";
+    }
+}
+
 STATIC void
 swift_chomp(char *str) {
 
@@ -257,6 +282,12 @@ swift_authenticate(struct swift_context *context) {
   sprintf(password, "%s%s", passtag, context->password);
 
   headerlist = swift_set_headers(context->curlhandle, 2, username, password);
+
+  curl_easy_setopt(context->curlhandle, CURLOPT_URL, context->connecturl);
+  curl_easy_setopt(context->curlhandle, CURLOPT_HEADERFUNCTION, swift_header_callback);
+  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEHEADER, context);
+  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEFUNCTION, swift_body_callback);
+  curl_easy_setopt(context->curlhandle, CURLOPT_WRITEDATA, context);
 
   curl_easy_perform(context->curlhandle);
   curl_slist_free_all(headerlist);

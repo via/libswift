@@ -22,6 +22,10 @@ struct client_options {
   char *path;
 
   char *filename;
+  FILE *datahandle;
+  char *str_filesize;
+  size_t filesize;
+
 
   client_action action;
 };

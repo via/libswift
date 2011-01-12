@@ -674,11 +674,18 @@ START_TEST (test_swift_authenticate) {
 
   c.username = user;
   c.password = pass;
+  c.connecturl = "http://swiftbox:11000";
+
   fail_unless(swift_authenticate(&c) == SWIFT_SUCCESS);
   fail_unless(c.valid_auth == 0);
   fail_unless(c.state == SWIFT_STATE_AUTH);
   fail_unless(slist_contains(params->headers, "X-Storage-User: testuser"));
   fail_unless(slist_contains(params->headers, "X-Storage-Pass: testpass"));
+  fail_unless(params->headerfunc == (curl_write_callback)swift_header_callback);
+  fail_unless(params->headerdata == &c);
+  fail_unless(params->writefunc == (curl_write_callback)swift_body_callback);
+  fail_unless(params->writedata == &c);
+  fail_unless(strcmp(params->url, c.connecturl) == 0);
 
   test_curl_easy_reset(&c);
 

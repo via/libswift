@@ -100,4 +100,6 @@ size_t swift_write(struct swift_transfer_handle *, const void *buf, size_t n);
 size_t swift_get_data(struct swift_transfer_handle *, void **ptr);
 void swift_seek(struct swift_transfer_handle *, unsigned long);
 
+const char *swift_errormsg(swift_error);
+
 #endif
