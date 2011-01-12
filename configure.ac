@@ -33,11 +33,13 @@ AS_IF([test "x$integration" != "xno"], [
 
 # Checks for programs.
 AC_PROG_CC
+AC_PROG_CC_C89
+AC_PROG_CXX
 AC_PROG_LIBTOOL
 
 # Checks for libraries.
 PKG_CHECK_MODULES(CURL, libcurl)
-AS_IF([test "x$enable_unittest" = "xyes" -o "x$integration" = "xyes" ], [
+AS_IF([test "x$enable_unittest" = "xyes" -o "x$integration" != "xno" ], [
   PKG_CHECK_MODULES([check], [check >= 0.9.4])
   ])
 
@@ -49,6 +51,6 @@ AC_TYPE_SIZE_T
 
 # Checks for library functions.
 AC_FUNC_MALLOC
-AC_CHECK_FUNCS([memset strchr])
+AC_CHECK_FUNCS([memset strchr strtol])
 
 AC_OUTPUT
