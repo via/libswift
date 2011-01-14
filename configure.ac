@@ -6,7 +6,7 @@ AM_INIT_AUTOMAKE([foreign -Wall -Werror])
 LT_INIT
 AC_CONFIG_SRCDIR([src/swift.c])
 AC_CONFIG_HEADERS([config.h])
-AC_CONFIG_FILES([Makefile src/Makefile tests/Makefile])
+AC_CONFIG_FILES([Makefile src/Makefile tests/Makefile swift.pc])
 AC_CONFIG_MACRO_DIR([m4])
 
 AC_ARG_ENABLE([unittest], AS_HELP_STRING([--enable-unittest],[enable exposed internal funcs for unit testing]))

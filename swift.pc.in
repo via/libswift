@@ -1,0 +1,11 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: swift
+Description: C library to access the OpenStack object store
+Requires: libcurl
+Version: @PACKAGE_VERSION@
+Libs: -L${libdir} -lswift -lcurl
+Cflags: -I${includedir}/
