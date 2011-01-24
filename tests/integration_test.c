@@ -39,23 +39,23 @@ START_TEST (test_reset) {
   int container_num;
   int object_num;
 
-  fail_if(swift_create_context(&c, url, username, password) != SWIFT_SUCCESS);
+  fail_if(swift_context_create(&c, url, username, password) != SWIFT_SUCCESS);
 
   /*In case we failed after creating the 100 objects, try to delete them */
   for (object_num = 0; object_num < 50; ++object_num) {
     sprintf(objname, "testobj%02d", object_num);
-    swift_delete_object(c, "testcont00", objname);
-    swift_delete_object(c, "testcont01", objname);
+    swift_object_delete(c, "testcont00", objname);
+    swift_object_delete(c, "testcont01", objname);
   }
 
   /*Check to see if any of the test containers exist, and if so, delete it */
   for (container_num = 0; container_num < 100; ++container_num) {
     sprintf(contname, "testcont%02d", container_num);
     if(swift_container_exists(c, contname) == SWIFT_SUCCESS) {
-      fail_unless(swift_delete_container(c, contname) == SWIFT_SUCCESS);
+      fail_unless(swift_container_delete(c, contname) == SWIFT_SUCCESS);
     }
   }
-  swift_delete_context(&c);
+  swift_context_delete(&c);
       
 
 
@@ -71,16 +71,16 @@ START_TEST (test_container_create) {
   int container_num;
   char contname[20];
 
-  fail_if(swift_create_context(&c, url, username, password) != SWIFT_SUCCESS);
+  fail_if(swift_context_create(&c, url, username, password) != SWIFT_SUCCESS);
   
   /* Create 100 containers */
   for (container_num = 0; container_num < 100; ++container_num) {
     sprintf(contname, "testcont%02d", container_num);
-    e = swift_create_container(c, contname);
+    e = swift_container_create(c, contname);
     fail_unless(e == SWIFT_SUCCESS);
   } 
 
-  swift_delete_context(&c);
+  swift_context_delete(&c);
 
 }
 END_TEST
@@ -93,16 +93,16 @@ START_TEST (test_container_overwrite) {
   int container_num;
   char contname[20];
 
-  fail_if(swift_create_context(&c, url, username, password) != SWIFT_SUCCESS);
+  fail_if(swift_context_create(&c, url, username, password) != SWIFT_SUCCESS);
 
   fail_unless(swift_container_exists(c, "testcont00") == SWIFT_SUCCESS);
 
   /*Make sure we can't overwrite a container.  Need to fix error response code
    * to return correct error values/
    */
-  fail_unless(swift_create_container(c, "testcont00") != SWIFT_SUCCESS);
+  fail_unless(swift_container_create(c, "testcont00") != SWIFT_SUCCESS);
 
-  swift_delete_context(&c);
+  swift_context_delete(&c);
 }
 END_TEST
 
@@ -116,26 +116,26 @@ START_TEST (test_objects_create) {
   char objname[20];
   void *data;
 
-  fail_if(swift_create_context(&c, url, username, password) != SWIFT_SUCCESS);
+  fail_if(swift_context_create(&c, url, username, password) != SWIFT_SUCCESS);
   /* We will create 50 objects in two containers */
   /* Objects will by 1024 bytes, patterned */
 
   for (object_num = 0; object_num < 50; ++object_num) {
     sprintf(objname, "testobj%02d", object_num);
-    fail_unless(swift_create_object(c, "testcont00", objname, &h, 1024)
+    fail_unless(swift_object_writehandle(c, "testcont00", objname, &h, 1024)
         == SWIFT_SUCCESS); 
     fail_unless(swift_get_data(h, &data) == 1024);
     memset(data, 0xAA, 1024);
     fail_unless(swift_sync(h) == SWIFT_SUCCESS);
     swift_free_transfer_handle(&h);
-    fail_unless(swift_create_object(c, "testcont01", objname, &h, 1024)
+    fail_unless(swift_object_writehandle(c, "testcont01", objname, &h, 1024)
         == SWIFT_SUCCESS); 
     fail_unless(swift_get_data(h, &data) == 1024);
     memset(data, 0xAA, 1024);
     fail_unless(swift_sync(h) == SWIFT_SUCCESS);
     swift_free_transfer_handle(&h);
   }
-  swift_delete_context(&c);
+  swift_context_delete(&c);
 }
 END_TEST                               
 
@@ -152,12 +152,12 @@ START_TEST (test_objects_premove_verify) {
   size_t totbytes;
   int curbyte;
 
-  fail_if(swift_create_context(&c, url, username, password) != SWIFT_SUCCESS);
+  fail_if(swift_context_create(&c, url, username, password) != SWIFT_SUCCESS);
 
   for (object_num = 0; object_num < 50; ++object_num) {
     sprintf(objname, "testobj%02d", object_num);
     /*Test container 1*/
-    fail_unless(swift_read_object(c, "testcont00", objname, &h) 
+    fail_unless(swift_object_readhandle(c, "testcont00", objname, &h) 
         == SWIFT_SUCCESS);
     fail_unless(h->length == 1024);
 
@@ -172,7 +172,7 @@ START_TEST (test_objects_premove_verify) {
     fail_unless(totbytes == 1024);
     swift_free_transfer_handle(&h);
   }
-  swift_delete_context(&c);
+  swift_context_delete(&c);
 
 }
 END_TEST
@@ -185,16 +185,16 @@ START_TEST (test_objects_delete) {
   int object_num;
   char objname[20];
 
-  fail_if(swift_create_context(&c, url, username, password) != SWIFT_SUCCESS);
+  fail_if(swift_context_create(&c, url, username, password) != SWIFT_SUCCESS);
 
   for (object_num = 0; object_num < 50; ++object_num) {
     sprintf(objname, "testobj%02d", object_num);
-    fail_unless(swift_delete_object(c, "testcont00", objname)
+    fail_unless(swift_object_delete(c, "testcont00", objname)
         == SWIFT_SUCCESS);
-    fail_unless(swift_delete_object(c, "testcont01", objname)
+    fail_unless(swift_object_delete(c, "testcont01", objname)
         == SWIFT_SUCCESS); 
   }
-  swift_delete_context(&c);
+  swift_context_delete(&c);
 }
 END_TEST
 
@@ -205,14 +205,14 @@ START_TEST (test_container_delete) {
   int container_num;
   char contname[20];
 
-  fail_if(swift_create_context(&c, url, username, password) != SWIFT_SUCCESS);
+  fail_if(swift_context_create(&c, url, username, password) != SWIFT_SUCCESS);
   
   for (container_num = 99; container_num >= 0; --container_num) {
     sprintf(contname, "testcont%02d", container_num);
-    e = swift_delete_container(c, contname);
+    e = swift_container_delete(c, contname);
     fail_unless(e == SWIFT_SUCCESS);
   }
-  swift_delete_context(&c);
+  swift_context_delete(&c);
 
 }
 END_TEST
@@ -255,7 +255,7 @@ main(int argc, char **argv) {
   printf("Testing with user %s against server: %s\n", username, url);
 
   swift_init();
-  e = swift_create_context(&c, url, username, password);
+  e = swift_context_create(&c, url, username, password);
   if (e) {
     printf("Error creating context!\n");
     exit(EXIT_FAILURE);
@@ -266,7 +266,7 @@ main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  swift_delete_context(&c);
+  swift_context_delete(&c);
 
 
   Suite *s = swift_integration();

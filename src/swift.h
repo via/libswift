@@ -69,9 +69,9 @@ struct swift_transfer_handle {
 swift_error swift_init();
 swift_error swift_deinit();
 
-swift_error swift_create_context(struct swift_context **, 
+swift_error swift_context_create(struct swift_context **, 
     const char *connecturl, const char *username, const char *password);
-swift_error swift_delete_context(struct swift_context **);
+swift_error swift_context_delete(struct swift_context **);
 
 swift_error swift_can_connect(struct swift_context *);
 
@@ -80,21 +80,22 @@ swift_error swift_node_list(struct swift_context *, const char *path,
 swift_error swift_node_list_free(char ***contents);
 
 swift_error swift_container_exists(struct swift_context *, const char *container);
-swift_error swift_create_container(struct swift_context *, const char *container);
-swift_error swift_delete_container(struct swift_context *, const char *container);
+swift_error swift_container_create(struct swift_context *, const char *container);
+swift_error swift_container_delete(struct swift_context *, const char *container);
 
 swift_error swift_object_exists(struct swift_context *, const char *container, 
     const char *object, unsigned long *length);
-swift_error swift_create_object(struct swift_context *, const char *container, 
-    const char *object, struct swift_transfer_handle **, unsigned long length);
-swift_error swift_delete_object(struct swift_context *, const char *container, 
+swift_error swift_object_delete(struct swift_context *, const char *container, 
     const char *object);
-swift_error swift_read_object(struct swift_context *, const char *container, 
+swift_error swift_object_readhandle(struct swift_context *, const char *container, 
     const char *object, struct swift_transfer_handle **);
+swift_error swift_object_writehandle(struct swift_context *, const char *container, 
+    const char *object, struct swift_transfer_handle **, unsigned long length);
 
 swift_error swift_sync(struct swift_transfer_handle *);
 void swift_free_transfer_handle(struct swift_transfer_handle **);
 
+/* Easy posix layer for simple read-write. Does not use chunked transfers! */
 size_t swift_read(struct swift_transfer_handle *, void *buf, size_t nbytes);
 size_t swift_write(struct swift_transfer_handle *, const void *buf, size_t n);
 size_t swift_get_data(struct swift_transfer_handle *, void **ptr);

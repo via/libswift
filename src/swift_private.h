@@ -32,11 +32,11 @@ STATIC size_t swift_upload_callback(void *, size_t, size_t, void *);
 STATIC swift_error swift_create_transfer_handle(struct swift_context *, const char *,
     const char *, struct swift_transfer_handle **, unsigned long);
 STATIC swift_error swift_node_list_setup(struct swift_context *, const char *);
-STATIC swift_error swift_create_container_setup(struct swift_context *, const char *);
-STATIC swift_error swift_delete_container_setup(struct swift_context *, const char *);
+STATIC swift_error swift_container_create_setup(struct swift_context *, const char *);
+STATIC swift_error swift_container_delete_setup(struct swift_context *, const char *);
 STATIC swift_error swift_object_exists_setup(struct swift_context *, const char *,
     const char *);
-STATIC swift_error swift_delete_object_setup(struct swift_context *, const char *,
+STATIC swift_error swift_object_delete_setup(struct swift_context *, const char *,
     const char *);
 
 #endif

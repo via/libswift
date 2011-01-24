@@ -317,20 +317,20 @@ START_TEST (test_swift_upload_callback) {
 END_TEST
 
 
-START_TEST (test_swift_create_context) {
+START_TEST (test_swift_context_create) {
 
   struct swift_context *c;
-  fail_if(swift_create_context(&c, "blah1", "blah2", "blah3"));
+  fail_if(swift_context_create(&c, "blah1", "blah2", "blah3"));
   fail_if(strcmp("blah1", c->connecturl) != 0);
   fail_if(strcmp("blah2", c->username) != 0);
   fail_if(strcmp("blah3", c->password) != 0);
-  swift_delete_context(&c);
+  swift_context_delete(&c);
 
-  fail_if(swift_create_context(&c, "", "", ""));
+  fail_if(swift_context_create(&c, "", "", ""));
   fail_if(strcmp("", c->connecturl) != 0);
   fail_if(strcmp("", c->username) != 0);
   fail_if(strcmp("", c->password) != 0);
-  swift_delete_context(&c);
+  swift_context_delete(&c);
 }
 END_TEST
 
@@ -383,25 +383,25 @@ START_TEST (test_swift_node_list_free) {
 }
 END_TEST
 
-START_TEST (test_swift_create_container_setup) {
+START_TEST (test_swift_container_create_setup) {
 
   struct swift_context c;
   char *data;
   struct test_curl_params *params = test_curl_getparams();
 
-  fail_unless(swift_create_container_setup(NULL, "test") == SWIFT_ERROR_NOTFOUND);
-  fail_unless(swift_create_container_setup(&c, NULL) == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_container_create_setup(NULL, "test") == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_container_create_setup(&c, NULL) == SWIFT_ERROR_NOTFOUND);
 
   c.curlhandle = curl_easy_init();
   c.authurl = "http://swiftbox";
 
-  fail_if(swift_create_container_setup(&c, "") != SWIFT_SUCCESS);
+  fail_if(swift_container_create_setup(&c, "") != SWIFT_SUCCESS);
   fail_unless(c.state == SWIFT_STATE_CONTAINER_CREATE);
   fail_if(strcmp(params->request, "PUT") != 0);
   curl_easy_getinfo(c.curlhandle, CURLINFO_EFFECTIVE_URL, &data);
   fail_if(strcmp(data, "http://swiftbox/") != 0);
 
-  fail_if(swift_create_container_setup(&c, "testcont") != SWIFT_SUCCESS);
+  fail_if(swift_container_create_setup(&c, "testcont") != SWIFT_SUCCESS);
   fail_unless(c.state == SWIFT_STATE_CONTAINER_CREATE);
   fail_if(strcmp(params->request, "PUT") != 0);
   curl_easy_getinfo(c.curlhandle, CURLINFO_EFFECTIVE_URL, &data);
@@ -413,21 +413,21 @@ START_TEST (test_swift_create_container_setup) {
 END_TEST
 
 
-START_TEST (test_swift_delete_container_setup) {
+START_TEST (test_swift_container_delete_setup) {
 
   struct swift_context c;
   char *data;
   struct test_curl_params *params = test_curl_getparams();
 
-  fail_unless(swift_delete_container_setup(NULL, "test") == SWIFT_ERROR_NOTFOUND);
-  fail_unless(swift_delete_container_setup(&c, NULL) == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_container_delete_setup(NULL, "test") == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_container_delete_setup(&c, NULL) == SWIFT_ERROR_NOTFOUND);
 
   c.curlhandle = curl_easy_init();
   c.authurl = "http://swiftbox";
 
-  fail_if(swift_delete_container_setup(&c, "") != SWIFT_ERROR_EXISTS);
+  fail_if(swift_container_delete_setup(&c, "") != SWIFT_ERROR_EXISTS);
 
-  fail_if(swift_delete_container_setup(&c, "testcont") != SWIFT_SUCCESS);
+  fail_if(swift_container_delete_setup(&c, "testcont") != SWIFT_SUCCESS);
   fail_unless(c.state == SWIFT_STATE_CONTAINER_DELETE);
   fail_if(strcmp(params->request, "DELETE") != 0);
   curl_easy_getinfo(c.curlhandle, CURLINFO_EFFECTIVE_URL, &data);
@@ -465,20 +465,20 @@ START_TEST (test_swift_object_exists_setup) {
 END_TEST
 
 
-START_TEST (test_swift_delete_object_setup) {
+START_TEST (test_swift_object_delete_setup) {
 
   struct swift_context c;
   char *data;
   struct test_curl_params *params = test_curl_getparams();
 
-  fail_unless(swift_delete_object_setup(NULL, "", "") == SWIFT_ERROR_NOTFOUND);
-  fail_unless(swift_delete_object_setup(&c, NULL, "") == SWIFT_ERROR_NOTFOUND);
-  fail_unless(swift_delete_object_setup(&c, "", NULL) == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_object_delete_setup(NULL, "", "") == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_object_delete_setup(&c, NULL, "") == SWIFT_ERROR_NOTFOUND);
+  fail_unless(swift_object_delete_setup(&c, "", NULL) == SWIFT_ERROR_NOTFOUND);
 
   c.curlhandle = curl_easy_init();
   c.authurl = "http://swiftbox";
 
-  fail_if(swift_delete_object_setup(&c, "testcont", "testobj") != SWIFT_SUCCESS);
+  fail_if(swift_object_delete_setup(&c, "testcont", "testobj") != SWIFT_SUCCESS);
   fail_unless(c.state == SWIFT_STATE_OBJECT_DELETE);
   fail_if(strcmp(params->request, "DELETE") != 0);
   curl_easy_getinfo(c.curlhandle, CURLINFO_EFFECTIVE_URL, &data);
@@ -824,13 +824,13 @@ Suite *swift_suite(void) {
   tcase_add_test(tc_core, test_swift_set_headers);
   tcase_add_test(tc_core, test_swift_string_to_list);
 
-  tcase_add_test(tc_api, test_swift_create_context);
+  tcase_add_test(tc_api, test_swift_context_create);
   tcase_add_test(tc_api, test_swift_node_list_setup);
   tcase_add_test(tc_api, test_swift_node_list_free);
-  tcase_add_test(tc_api, test_swift_create_container_setup);
-  tcase_add_test(tc_api, test_swift_delete_container_setup);
+  tcase_add_test(tc_api, test_swift_container_create_setup);
+  tcase_add_test(tc_api, test_swift_container_delete_setup);
   tcase_add_test(tc_api, test_swift_object_exists_setup);
-  tcase_add_test(tc_api, test_swift_delete_object_setup);
+  tcase_add_test(tc_api, test_swift_object_delete_setup);
   tcase_add_test(tc_api, test_swift_free_transfer_handle);
   tcase_add_test(tc_api, test_swift_create_transfer_handle);
   tcase_add_test(tc_api, test_swift_sync_setup_read);

@@ -319,7 +319,7 @@ swift_deinit() {
 }
 
 swift_error
-swift_create_context(struct swift_context ** context,
+swift_context_create(struct swift_context ** context,
                      const char *connecturl,
                      const char *username,
                      const char *password) {
@@ -345,7 +345,7 @@ swift_create_context(struct swift_context ** context,
   if ( !(*context)->username ||
        !(*context)->password ||
        !(*context)->connecturl ) {
-    swift_delete_context(context);
+    swift_context_delete(context);
     return SWIFT_ERROR_MEMORY;
   }
 
@@ -357,7 +357,7 @@ swift_create_context(struct swift_context ** context,
 }
 
 swift_error
-swift_delete_context(struct swift_context **context) {
+swift_context_delete(struct swift_context **context) {
 
   /* Check each allocated object in it and free it*/
   if ((*context)->username) {
@@ -503,7 +503,7 @@ swift_container_exists(struct swift_context *context, const char *container) {
 }
 
 STATIC swift_error
-swift_create_container_setup(struct swift_context *context, const char *container) {
+swift_container_create_setup(struct swift_context *context, const char *container) {
 
   char *url;
 
@@ -527,7 +527,7 @@ swift_create_container_setup(struct swift_context *context, const char *containe
 
 
 swift_error
-swift_create_container(struct swift_context * context, const char *container) {
+swift_container_create(struct swift_context * context, const char *container) {
 
   int response;
   swift_error s_err;
@@ -538,14 +538,14 @@ swift_create_container(struct swift_context * context, const char *container) {
     }
   }
 
-  swift_create_container_setup(context, container);
+  swift_container_create_setup(context, container);
   response = swift_perform(context);
 
   return swift_response(response);
 }
 
 STATIC swift_error
-swift_delete_container_setup(struct swift_context *context, const char *container) {
+swift_container_delete_setup(struct swift_context *context, const char *container) {
 
   char *url;
 
@@ -574,7 +574,7 @@ swift_delete_container_setup(struct swift_context *context, const char *containe
 
 
 swift_error
-swift_delete_container(struct swift_context * context, const char *container) {
+swift_container_delete(struct swift_context * context, const char *container) {
                                                                                
   int response;
   swift_error s_err;
@@ -585,7 +585,7 @@ swift_delete_container(struct swift_context * context, const char *container) {
     }
   }
 
-  if ( (s_err = swift_delete_container_setup(context, container)) ) {
+  if ( (s_err = swift_container_delete_setup(context, container)) ) {
     return s_err;
   }
 
@@ -648,7 +648,7 @@ swift_object_exists(struct swift_context *context, const char *container,
 }
 
 STATIC swift_error
-swift_delete_object_setup(struct swift_context *context, const char *container,
+swift_object_delete_setup(struct swift_context *context, const char *container,
     const char *object) {
 
   char *url;
@@ -674,7 +674,7 @@ swift_delete_object_setup(struct swift_context *context, const char *container,
 }
 
 swift_error
-swift_delete_object(struct swift_context *context, const char *container,
+swift_object_delete(struct swift_context *context, const char *container,
     const char *object) {
 
   int response;
@@ -686,7 +686,7 @@ swift_delete_object(struct swift_context *context, const char *container,
     }
   }
 
-  if ( (s_err = swift_delete_object_setup(context, container, object)) ) {
+  if ( (s_err = swift_object_delete_setup(context, container, object)) ) {
     return s_err;
   }
 
@@ -762,7 +762,7 @@ swift_create_transfer_handle(struct swift_context *context, const char *containe
 
 
 swift_error
-swift_create_object(struct swift_context *context, const char *container,
+swift_object_writehandle(struct swift_context *context, const char *container,
     const char *object, struct swift_transfer_handle **handle, unsigned long len) {
 
   unsigned long length;
@@ -794,7 +794,7 @@ swift_create_object(struct swift_context *context, const char *container,
 }
 
 swift_error
-swift_read_object(struct swift_context *context, const char *container,
+swift_object_readhandle(struct swift_context *context, const char *container,
     const char *object, struct swift_transfer_handle **handle) {
 
   unsigned long length;

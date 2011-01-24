@@ -243,7 +243,7 @@ execute_objread(struct client_options *opts, struct swift_context *c) {
   size_t n_bytes;
   char tempbuf[128];
 
-  e = swift_read_object(c, opts->container, opts->object, &h);
+  e = swift_object_readhandle(c, opts->container, opts->object, &h);
   if (e == SWIFT_SUCCESS) {
     while ( n_bytes = swift_read(h, tempbuf, 128)) {
       fwrite(tempbuf, 1, n_bytes, opts->datahandle);
@@ -263,7 +263,7 @@ execute_objwrite(struct client_options *opts, struct swift_context *c) {
   size_t n_bytes_written;
   char tempbuf[128];
 
-  e = swift_create_object(c, opts->container, opts->object, &h, opts->filesize);
+  e = swift_object_writehandle(c, opts->container, opts->object, &h, opts->filesize);
   if (e == SWIFT_SUCCESS) {
     while (n_bytes_read = fread(tempbuf, 1, 128, opts->datahandle)) {
       n_bytes_written = swift_write(h, tempbuf, n_bytes_read);
@@ -290,10 +290,10 @@ execute_action(struct client_options *opts, struct swift_context *c) {
       e = execute_nodelist(opts, c);
       break;
     case ACTION_CONT_CREATE:
-      e = swift_create_container(c, opts->container);
+      e = swift_container_create(c, opts->container);
       break;
     case ACTION_CONT_DELETE:
-      e = swift_delete_container(c, opts->container);
+      e = swift_container_delete(c, opts->container);
       break;
     case ACTION_CONT_EXIST:
       e = swift_container_exists(c, opts->container);
@@ -308,7 +308,7 @@ execute_action(struct client_options *opts, struct swift_context *c) {
       }
       break;
     case ACTION_OBJ_DELETE:
-      e = swift_delete_object(c, opts->container, opts->object);
+      e = swift_object_delete(c, opts->container, opts->object);
       break;
     case ACTION_OBJ_READ:
       e = execute_objread(opts, c);
@@ -352,7 +352,7 @@ main(int argc, char ** argv) {
 
 
   swift_init();
-  e = swift_create_context(&c, opts.url, opts.username, opts.password);
+  e = swift_context_create(&c, opts.url, opts.username, opts.password);
   if (e) {
     fprintf(stderr, "Error: %s, line %d\n", swift_errormsg(e), __LINE__);
     exit(EXIT_FAILURE);
@@ -364,7 +364,7 @@ main(int argc, char ** argv) {
     exit(EXIT_FAILURE);
   }
 
-  swift_delete_context(&c);
+  swift_context_delete(&c);
 
   fclose(opts.datahandle);
 
