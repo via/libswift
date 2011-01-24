@@ -85,17 +85,39 @@ swift_error swift_container_delete(struct swift_context *, const char *container
 
 swift_error swift_object_exists(struct swift_context *, const char *container, 
     const char *object, unsigned long *length);
-swift_error swift_object_delete(struct swift_context *, const char *container, 
-    const char *object);
-swift_error swift_object_readhandle(struct swift_context *, const char *container, 
-    const char *object, struct swift_transfer_handle **);
 swift_error swift_object_writehandle(struct swift_context *, const char *container, 
     const char *object, struct swift_transfer_handle **, unsigned long length);
 
 swift_error swift_sync(struct swift_transfer_handle *);
 void swift_free_transfer_handle(struct swift_transfer_handle **);
 
+/* Chunked read/write layer with callbacks, support for multiple ops */
+typedef size_t (*)(void *data, size_t length, void *userdata) swift_callback;
+
+struct swift_multi_op {
+  char container[256];
+  char objname[1024];
+  swift_transfermode mode;
+  swift_callback callback;
+  void *userdata;
+}
+
+swift_error swift_object_chunked_operation(struct swift_context *,
+    struct swift_multi_op *oplist, unsigned int n_ops);
+
+/* Simple get/put layer for transfering the entire file in one call, no need for
+ * handles
+ */
+swift_error swift_object_put(struct swift_context *, const char *container,
+    const char *object, void *data, size_t length);
+swift_error swift_object_get(struct swift_context *, const char *container,
+    const char *object, void *data, size_t maxlen);
+
 /* Easy posix layer for simple read-write. Does not use chunked transfers! */
+swift_error swift_object_delete(struct swift_context *, const char *container, 
+    const char *object);
+swift_error swift_object_readhandle(struct swift_context *, const char *container, 
+    const char *object, struct swift_transfer_handle **);
 size_t swift_read(struct swift_transfer_handle *, void *buf, size_t nbytes);
 size_t swift_write(struct swift_transfer_handle *, const void *buf, size_t n);
 size_t swift_get_data(struct swift_transfer_handle *, void **ptr);
