@@ -995,3 +995,70 @@ swift_object_get(struct swift_context *c, char *container,
   return swift_sync(&handle);
 
 }
+
+STATIC size_t
+swift_multi_callback(void *ptr, size_t size, size_t nmemb, void *user) {
+
+  struct swift_multi_op *op = (struct swift_multi_op *)user;
+
+  return op->callback(ptr, size * nmemb, op->userdata);
+}
+
+STATIC swift_error
+swift_multi_setup(struct swift_multi_op *op) {
+
+  char *url;
+  op->curlhandle = curl_easy_init();
+
+  url = (char *)malloc(strlen(op->container) + strlen(op->context->authurl) +
+      strlen(op->objname) + 3);
+  if (!url) {
+    return SWIFT_ERROR_MEMORY;
+  }
+
+  sprintf(url, "%s/%s/%s", op->context->authurl, op->container, op->objname); 
+
+  curl_easy_setopt(op->curlhandle, CURLOPT_URL, url);
+  if (op->mode == SWIFT_WRITE) {
+    curl_easy_setopt(op->curlhandle, CURLOPT_CUSTOMREQUEST, "PUT");
+    curl_easy_setopt(op->curlhandle, CURLOPT_READFUNCTION, swift_multi_callback);
+    curl_easy_setopt(op->curlhandle, CURLOPT_READDATA, op);
+    curl_easy_setopt(op->curlhandle, CURLOPT_UPLOAD, 1);
+    swift_set_headers(op->curlhandle, 2, op->context->authurl, 
+        "Transfer-Encoding: chunked");
+  } else if (op->mode == SWIFT_READ) {
+    curl_easy_setopt(op->curlhandle, CURLOPT_CUSTOMREQUEST, "GET");
+    curl_easy_setopt(op->curlhandle, CURLOPT_WRITEFUNCTION, swift_multi_callback);
+    curl_easy_setopt(op->curlhandle, CURLOPT_WRITEDATA, op);
+    swift_set_headers(op->curlhandle, 1, op->context->authurl);
+  }
+
+}
+
+  
+
+
+swift_error
+swift_object_chunked_operation(struct swift_context *context,
+    struct swift_multi_op *oplist, unsigned int n_ops) {
+
+
+  CURLM *multi;
+  int cur_entry = 0;
+
+  if (!oplist || !n_ops) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
+
+                      
+  multi = curl_multi_init();
+
+  while (cur_entry != n_ops) {
+    oplist[cur_entry].curlhandle = curl_easy_init();
+    swift_multi_setup(&oplist[cur_entry]);
+    curl_multi_add_handle(multi, oplist[cur_entry].curlhandle);
+  }
+
+  return SWIFT_SUCCESS;
+}
+

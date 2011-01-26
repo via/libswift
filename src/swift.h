@@ -103,6 +103,7 @@ struct swift_multi_op {
   swift_callback callback;
   void *userdata;
   swift_error retval;
+  CURL *curlhandle;
 };
 
 static inline void
