@@ -30,6 +30,7 @@ typedef enum {
   SWIFT_STATE_OBJECT_DELETE,
   SWIFT_STATE_OBJECT_READ,
   SWIFT_STATE_OBJECT_WRITE,
+  SWIFT_STATE_OBJECT_WRITE_CHUNKED,
 } swift_state;
 
 struct swift_context {
@@ -41,7 +42,7 @@ struct swift_context {
   char *authtoken;
   int num_containers;
   int num_objects;
-  unsigned long obj_length;
+  size_t obj_length;
 
   /* Nodelist stuff */
   char *buffer;
@@ -84,23 +85,43 @@ swift_error swift_container_create(struct swift_context *, const char *container
 swift_error swift_container_delete(struct swift_context *, const char *container);
 
 swift_error swift_object_exists(struct swift_context *, const char *container, 
-    const char *object, unsigned long *length);
+    const char *object, size_t *length);
 swift_error swift_object_writehandle(struct swift_context *, const char *container, 
-    const char *object, struct swift_transfer_handle **, unsigned long length);
+    const char *object, struct swift_transfer_handle **, size_t length);
 
 swift_error swift_sync(struct swift_transfer_handle *);
 void swift_free_transfer_handle(struct swift_transfer_handle **);
 
 /* Chunked read/write layer with callbacks, support for multiple ops */
-typedef size_t (*)(void *data, size_t length, void *userdata) swift_callback;
+typedef size_t(*swift_callback)(void *data, size_t len, void *user);
 
 struct swift_multi_op {
   char container[256];
   char objname[1024];
+  struct swift_context *context;
   swift_transfermode mode;
   swift_callback callback;
   void *userdata;
+  swift_error retval;
+};
+
+static inline void
+swift_load_op(struct swift_multi_op *op, struct swift_context *c, 
+    const char *container, const char *obj,
+    swift_transfermode mode, swift_callback cb, void *ud) {
+
+  strncpy(op->container, container, 256);
+  op->container[255] = '\0';
+  strncpy(op->objname, obj, 1024);
+  op->objname[1023] = '\0';
+
+  op->context = c;
+  op->mode = mode;
+  op->callback = cb;
+  op->userdata = ud;
+
 }
+
 
 swift_error swift_object_chunked_operation(struct swift_context *,
     struct swift_multi_op *oplist, unsigned int n_ops);
@@ -108,10 +129,10 @@ swift_error swift_object_chunked_operation(struct swift_context *,
 /* Simple get/put layer for transfering the entire file in one call, no need for
  * handles
  */
-swift_error swift_object_put(struct swift_context *, const char *container,
-    const char *object, void *data, size_t length);
-swift_error swift_object_get(struct swift_context *, const char *container,
-    const char *object, void *data, size_t maxlen);
+swift_error swift_object_put(struct swift_context *, char *container,
+    char *object, void *data, size_t length);
+swift_error swift_object_get(struct swift_context *, char *container,
+    char *object, void *data, size_t maxlen);
 
 /* Easy posix layer for simple read-write. Does not use chunked transfers! */
 swift_error swift_object_delete(struct swift_context *, const char *container, 

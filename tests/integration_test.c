@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include "curl/curl.h"
 #include <check.h>
+#include <sys/mman.h>
 
 #include "../src/swift.h"
 
@@ -139,6 +140,28 @@ START_TEST (test_objects_create) {
 }
 END_TEST                               
 
+START_TEST (test_object_put) {
+
+  struct swift_context *c;
+  swift_error e;
+  int object_num;
+  void *data;
+
+  fail_if(swift_context_create(&c, url, username, password) != SWIFT_SUCCESS);
+  data = mmap(0, 1024 * 1024, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  fail_unless(data != MAP_FAILED);
+
+  memset(data, 0, 1024 * 1024);
+  strcpy(data, "Test!\n");
+
+  swift_object_put(c, "testcont00", "testput", data, 1024 * 1024);
+  swift_object_delete(c, "testcont00", "testput");
+
+  swift_context_delete(&c);
+
+}
+END_TEST
+
 
 START_TEST (test_objects_premove_verify) {
 
@@ -218,6 +241,7 @@ START_TEST (test_container_delete) {
 END_TEST
 
 
+
 Suite *
 swift_integration(void) {
   
@@ -229,6 +253,7 @@ swift_integration(void) {
   tcase_add_test(tc_int, test_container_overwrite);
   tcase_add_test(tc_int, test_objects_create);
   tcase_add_test(tc_int, test_objects_premove_verify);
+  tcase_add_test(tc_int, test_object_put);
   tcase_add_test(tc_int, test_objects_delete);
   tcase_add_test(tc_int, test_container_delete);
 

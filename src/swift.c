@@ -625,7 +625,7 @@ swift_object_exists_setup(struct swift_context *context, const char *container,
 
 swift_error
 swift_object_exists(struct swift_context *context, const char *container,
-    const char *object, unsigned long *length) {
+    const char *object, size_t *length) {
                                                                                 
   int response;
   swift_error s_err;
@@ -715,7 +715,7 @@ swift_free_transfer_handle(struct swift_transfer_handle **handle) {
 
 STATIC swift_error
 swift_create_transfer_handle(struct swift_context *context, const char *container, 
-    const char *object, struct swift_transfer_handle **handle, unsigned long length) {
+    const char *object, struct swift_transfer_handle **handle, size_t length) {
 
   struct swift_transfer_handle *l_handle;
 
@@ -763,9 +763,9 @@ swift_create_transfer_handle(struct swift_context *context, const char *containe
 
 swift_error
 swift_object_writehandle(struct swift_context *context, const char *container,
-    const char *object, struct swift_transfer_handle **handle, unsigned long len) {
+    const char *object, struct swift_transfer_handle **handle, size_t len) {
 
-  unsigned long length;
+  size_t length;
   struct swift_transfer_handle *l_handle;
   swift_error s_err;
 
@@ -797,7 +797,7 @@ swift_error
 swift_object_readhandle(struct swift_context *context, const char *container,
     const char *object, struct swift_transfer_handle **handle) {
 
-  unsigned long length;
+  size_t length;
   struct swift_transfer_handle *l_handle;
   swift_error s_err;
 
@@ -827,6 +827,7 @@ swift_sync_setup(struct swift_transfer_handle *handle) {
 
   struct swift_context *context;
   char *url;
+  swift_error s_err;
 
   if (!handle) {
     return SWIFT_ERROR_NOTFOUND;
@@ -836,6 +837,12 @@ swift_sync_setup(struct swift_transfer_handle *handle) {
 
   if (!context || !handle->container || !handle->object) {
     return SWIFT_ERROR_NOTFOUND;
+  }
+
+  if (!context->valid_auth) {
+    if ( (s_err = swift_authenticate(context)) ) {
+      return s_err;
+    }
   }
 
   url = (char *)malloc(strlen(handle->container) + strlen(context->authurl) +
@@ -937,3 +944,54 @@ swift_seek(struct swift_transfer_handle *handle, unsigned long pos) {
 
 }
   
+swift_error
+swift_object_put(struct swift_context *c, char *container,
+    char *object, void *data, size_t length) {
+
+  struct swift_transfer_handle handle;
+
+  if (!data || !object || !container || !c) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
+
+  handle.container = container;
+  handle.object = object;
+  handle.mode = SWIFT_WRITE;
+  handle.parent = c;
+  handle.fpos = 0;
+  handle.length = length;
+  handle.ptr = data;
+
+  return swift_sync(&handle);
+
+}
+
+
+swift_error
+swift_object_get(struct swift_context *c, char *container,
+    char *object, void *data, size_t maxlen) {
+
+  struct swift_transfer_handle handle;
+  swift_error s_err;
+  size_t length;
+
+  if (!data || !object || !container || !c) {
+    return SWIFT_ERROR_NOTFOUND;
+  }
+
+  if ( (s_err = swift_object_exists(c, container, object, &length)) ) {
+    /* If it already exists, refuse to do anything */
+    return s_err;
+  }
+
+  handle.container = container;
+  handle.object = object;
+  handle.mode = SWIFT_READ;
+  handle.parent = c;
+  handle.fpos = 0;
+  handle.length = (length > maxlen) ? maxlen : length;
+  handle.ptr = data;
+
+  return swift_sync(&handle);
+
+}
