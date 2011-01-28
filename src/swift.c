@@ -1025,13 +1025,13 @@ swift_multi_setup(struct swift_multi_op *op) {
     curl_easy_setopt(op->curlhandle, CURLOPT_READFUNCTION, swift_multi_callback);
     curl_easy_setopt(op->curlhandle, CURLOPT_READDATA, op);
     curl_easy_setopt(op->curlhandle, CURLOPT_UPLOAD, 1);
-    swift_set_headers(op->curlhandle, 2, op->context->authurl, 
+    swift_set_headers(op->curlhandle, 2, op->context->authtoken, 
         "Transfer-Encoding: chunked");
   } else if (op->mode == SWIFT_READ) {
     curl_easy_setopt(op->curlhandle, CURLOPT_CUSTOMREQUEST, "GET");
     curl_easy_setopt(op->curlhandle, CURLOPT_WRITEFUNCTION, swift_multi_callback);
     curl_easy_setopt(op->curlhandle, CURLOPT_WRITEDATA, op);
-    swift_set_headers(op->curlhandle, 1, op->context->authurl);
+    swift_set_headers(op->curlhandle, 1, op->context->authtoken);
   }
 
 }
@@ -1073,12 +1073,12 @@ swift_object_chunked_operation(struct swift_context *context,
     ++cur_entry;
   }
 
-  while (n_ops) {
+  while (n_running) {
     while (curl_multi_perform(multi, &n_running) == CURLM_CALL_MULTI_PERFORM);
     /* Block here normally */
     /*Handle return values */
     while ((curl_msg = curl_multi_info_read(multi, &n_msgs)) != NULL) {   
-      curl_easy_getinfo(curl_msg->easy_handle, CURLOPT_PRIVATE, &t_op);
+      curl_easy_getinfo(curl_msg->easy_handle, CURLINFO_PRIVATE, &t_op);
       if (curl_msg->msg == CURLMSG_DONE) {
         curl_easy_getinfo(t_op->curlhandle, CURLINFO_RESPONSE_CODE,
             &curl_responsecode);
@@ -1087,7 +1087,6 @@ swift_object_chunked_operation(struct swift_context *context,
       }
     }
   }
-
 
   return SWIFT_SUCCESS;
 }
