@@ -4,6 +4,7 @@
 #include <check.h>
 #include <sys/mman.h>
 
+#include "../config.h"
 #include "../src/swift.h"
 
 #ifndef INTEGRATION

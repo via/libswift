@@ -1,5 +1,7 @@
 #ifndef SWIFT_PRIVATE_H
 #define SWIFT_PRIVATE_H
+
+#include <config.h>
       
 #ifdef UNITTEST
 #define STATIC

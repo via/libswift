@@ -1019,6 +1019,7 @@ swift_multi_setup(struct swift_multi_op *op) {
   sprintf(url, "%s/%s/%s", op->context->authurl, op->container, op->objname); 
 
   curl_easy_setopt(op->curlhandle, CURLOPT_URL, url);
+  curl_easy_setopt(op->curlhandle, CURLOPT_PRIVATE, op);
   if (op->mode == SWIFT_WRITE) {
     curl_easy_setopt(op->curlhandle, CURLOPT_CUSTOMREQUEST, "PUT");
     curl_easy_setopt(op->curlhandle, CURLOPT_READFUNCTION, swift_multi_callback);
@@ -1045,11 +1046,23 @@ swift_object_chunked_operation(struct swift_context *context,
 
   CURLM *multi;
   int cur_entry = 0;
+  int n_running = n_ops;
+  swift_error s_err;
+  struct swift_multi_op *t_op;
+  struct CURLMsg *curl_msg;
+  int n_msgs;
+  long curl_responsecode;
+
 
   if (!oplist || !n_ops) {
     return SWIFT_ERROR_NOTFOUND;
   }
 
+  if (!context->valid_auth) {
+    if ( (s_err = swift_authenticate(context)) ) {
+      return s_err;
+    }
+  }
                       
   multi = curl_multi_init();
 
@@ -1057,7 +1070,24 @@ swift_object_chunked_operation(struct swift_context *context,
     oplist[cur_entry].curlhandle = curl_easy_init();
     swift_multi_setup(&oplist[cur_entry]);
     curl_multi_add_handle(multi, oplist[cur_entry].curlhandle);
+    ++cur_entry;
   }
+
+  while (n_ops) {
+    while (curl_multi_perform(multi, &n_running) == CURLM_CALL_MULTI_PERFORM);
+    /* Block here normally */
+    /*Handle return values */
+    while ((curl_msg = curl_multi_info_read(multi, &n_msgs)) != NULL) {   
+      curl_easy_getinfo(curl_msg->easy_handle, CURLOPT_PRIVATE, &t_op);
+      if (curl_msg->msg == CURLMSG_DONE) {
+        curl_easy_getinfo(t_op->curlhandle, CURLINFO_RESPONSE_CODE,
+            &curl_responsecode);
+        t_op->retval = swift_response(curl_responsecode);
+        t_op->done = 1;
+      }
+    }
+  }
+
 
   return SWIFT_SUCCESS;
 }

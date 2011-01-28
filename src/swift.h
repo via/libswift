@@ -2,7 +2,6 @@
 #define MAIN_H
 
 #include <curl/curl.h>
-#include <config.h>
 
 typedef enum {
   SWIFT_SUCCESS = 0,
@@ -103,6 +102,7 @@ struct swift_multi_op {
   swift_callback callback;
   void *userdata;
   swift_error retval;
+  int done;
   CURL *curlhandle;
 };
 
@@ -120,6 +120,7 @@ swift_load_op(struct swift_multi_op *op, struct swift_context *c,
   op->mode = mode;
   op->callback = cb;
   op->userdata = ud;
+  op->done = 0;
 
 }
 
