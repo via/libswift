@@ -266,9 +266,10 @@ START_TEST (test_swift_body_callback_objread) {
   fail_unless(retval == 10);
 
   retval = swift_body_callback("Test4Test5", 2, 5, (void *)&c);
-  fail_unless(retval == 0);
+  printf("retval=%d\n", retval);
+  fail_unless(retval == 5);
 
-  fail_if(strcmp(c.buffer, "Test1Test2Test3") != 0);
+  fail_if(strcmp(c.buffer, "Test1Test2Test3Test4") != 0);
 
 }
 END_TEST

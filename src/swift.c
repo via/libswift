@@ -177,6 +177,14 @@ STATIC size_t
 swift_body_callback(void *ptr, size_t size, size_t nmemb, void *user) {
 
   struct swift_context *context = (struct swift_context *)user;
+  size_t real_size = size * nmemb;
+
+  if (context->buffer_pos + real_size > context->obj_length) {
+    real_size = context->obj_length - context->buffer_pos;
+  }
+  if (real_size == 0) {
+    return 0;
+  }
 
   switch (context->state) {
     case SWIFT_STATE_CONTAINERLIST:
@@ -189,29 +197,23 @@ swift_body_callback(void *ptr, size_t size, size_t nmemb, void *user) {
         context->buffer_pos = 0;
         context->buffer[context->obj_length] = '\0';
       }
-      if (context->buffer_pos + size * nmemb > context->obj_length) {
-        return 0;
-      }
-      memcpy(context->buffer + context->buffer_pos, ptr, size * nmemb);
-      context->buffer_pos += size * nmemb;
+      memcpy(context->buffer + context->buffer_pos, ptr, real_size);
+      context->buffer_pos += real_size;
 
       break;
     case SWIFT_STATE_OBJECT_READ:
       if (!context->buffer) {
         return 0;
       }
-      if (context->buffer_pos + size * nmemb > context->obj_length) {
-        return 0;
-      }
 
-      memcpy(context->buffer + context->buffer_pos, ptr, size * nmemb);
-      context->buffer_pos += size * nmemb;
+      memcpy(context->buffer + context->buffer_pos, ptr, real_size);
+      context->buffer_pos += real_size;
     default:
       break;
 
   }
 
-  return size * nmemb;
+  return real_size;
 }
 
 STATIC size_t
@@ -980,7 +982,6 @@ swift_object_get(struct swift_context *c, char *container,
   }
 
   if ( (s_err = swift_object_exists(c, container, object, &length)) ) {
-    /* If it already exists, refuse to do anything */
     return s_err;
   }
 
