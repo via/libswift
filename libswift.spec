@@ -3,7 +3,7 @@ Version:        1.0.0
 Release:        1%{?dist}
 Summary:        C swift bindings
 
-Group:          
+Group:          Other
 License:        GPL
 URL:            https://github.com/via/libswift.git
 Source0:        %{name}-%{version}.tar.gz
