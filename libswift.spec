@@ -1,7 +1,7 @@
 Name:           libswift
 Version:        1.0.0        
 Release:        1%{?dist}
-Summary:        
+Summary:        C swift bindings
 
 Group:          
 License:        GPL
@@ -37,7 +37,6 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root,-)
-%doc
 
 
 
