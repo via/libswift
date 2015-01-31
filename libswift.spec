@@ -37,6 +37,14 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root,-)
+%attr(0755, root, root) /usr/bin/swiftclient
+/usr/include/swift.h
+/usr/lib64/libswift.a
+/usr/lib64/libswift.la
+/usr/lib64/libswift.so
+/usr/lib64/libswift.so.0
+/usr/lib64/libswift.so.0.0.0
+/usr/lib64/pkgconfig/swift.pc
 
 
 
